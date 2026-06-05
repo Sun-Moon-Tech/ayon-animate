@@ -57,13 +57,10 @@ class AnimateHost(HostBase, IWorkfileHost, ILoadHost, IPublishHost):
         return os.path.normpath(session["AYON_WORKDIR"]).replace("\\", "/")
 
     def open_workfile(self, filepath):
-        lib.stub().open(filepath)
-
-        return True
+        return bool(lib.stub().open(filepath))
 
     def save_workfile(self, filepath=None):
-        _, ext = os.path.splitext(filepath)
-        lib.stub().saveAs(filepath, ext.lstrip("."), False)
+        lib.stub().save_workfile(filepath)
 
     def get_current_workfile(self):
         try:
@@ -82,7 +79,7 @@ class AnimateHost(HostBase, IWorkfileHost, ILoadHost, IPublishHost):
         return False
 
     def get_workfile_extensions(self):
-        return [".psd", ".psb"]
+        return [".fla"]
 
     def get_containers(self):
         return ls()

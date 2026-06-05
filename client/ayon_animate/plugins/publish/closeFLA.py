@@ -6,7 +6,7 @@ from ayon_animate import api as animate
 
 
 class CloseFLA(pyblish.api.ContextPlugin):
-    """Close PS after publish. For Webpublishing only.
+    """Close FLA after publish. For Webpublishing only.
     """
 
     order = pyblish.api.IntegratorOrder + 14

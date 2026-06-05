@@ -53,6 +53,10 @@ class AnimateServerStub:
     """
     PUBLISH_ICON = '\u2117 '
     LOADED_ICON = '\u25bc'
+        
+    @staticmethod
+    def _is_evalscript_error(value):
+        return isinstance(value, str) and value.strip() == "EvalScript error."
 
     def __init__(self):
         self.websocketserver = WebServerTool.get_instance()
@@ -73,16 +77,44 @@ class AnimateServerStub:
 
         return client
 
+    def host_trace(self, message):
+        """Helper for tracing messages in host log."""
+        result = self.websocketserver.call(
+            self.client.call('Animate.host_trace', message=message)
+        )
+        if self._is_evalscript_error(result):
+            return False
+        if isinstance(result, str):
+            lowered = result.strip().lower()
+            if lowered in {"", "null", "undefined", "false", "0"}:
+                return False
+        return bool(result)
+    
+        
     def open(self, path):
         """Open file located at 'path' (local).
 
         Args:
             path(string): file path locally
-        Returns: None
+        Returns:
+            bool: True on successful request dispatch, False otherwise.
         """
-        self.websocketserver.call(
-            self.client.call('Animate.open', path=path)
-        )
+        try:
+            res = self.websocketserver.call(
+                self.client.call('Animate.open', path=path)
+            )
+        except Exception:
+            return False
+
+        if self._is_evalscript_error(res):
+            return False
+
+        if isinstance(res, str):
+            lowered = res.strip().lower()
+            if lowered in {"", "null", "undefined", "false", "0"}:
+                return False
+
+        return bool(res)
 
     def read(self, layer, layers_meta=None):
         """Parses layer metadata from Headline field of active document.
@@ -203,6 +235,13 @@ class AnimateServerStub:
         res = self.websocketserver.call(
             self.client.call('Animate.get_layers')
         )
+
+        if self._is_evalscript_error(res):
+            return []
+        if res is None:
+            return []
+        if isinstance(res, str) and res.strip().lower() in {"", "null", "undefined"}:
+            return []
 
         return self._to_records(res)
 
@@ -347,6 +386,18 @@ class AnimateServerStub:
                 parent_set=parent_set,
             )
         )
+    def export_png_sequence(self, path):
+        """Export current document as PNG sequence to path.
+
+        Args:
+            path (str): Base path for exported frames (will append _XXXX.png)
+        """
+        
+        result = self.websocketserver.call(
+            self.client.call("Animate.export_png_sequence", path=path)
+        )
+        return result
+        
 
     def get_active_document_full_name(self):
         """Returns full name with path of active document via ws call
@@ -357,7 +408,10 @@ class AnimateServerStub:
         res = self.websocketserver.call(
             self.client.call('Animate.get_active_document_full_name')
         )
-
+        if self._is_evalscript_error(res):
+            return None
+        if isinstance(res, str) and res.strip().lower() in {"", "null", "undefined"}:
+            return None
         return res
 
     def get_active_document_name(self):
@@ -366,9 +420,12 @@ class AnimateServerStub:
         Returns(string):
             file name
         """
-        return self.websocketserver.call(
-            self.client.call('Animate.get_active_document_name')
-        )
+        # Derive name from full path to avoid an extra fragile eval route call.
+        full_name = self.get_active_document_full_name()
+        if not full_name:
+            return None
+
+        return Path(str(full_name)).name or None
 
     def is_saved(self):
         """Returns true if no changes in active document
@@ -376,9 +433,20 @@ class AnimateServerStub:
         Returns:
             <boolean>
         """
-        return self.websocketserver.call(
+        res = self.websocketserver.call(
             self.client.call('Animate.is_saved')
         )
+        if self._is_evalscript_error(res):
+            return False
+        if isinstance(res, bool):
+            return res
+        if isinstance(res, str):
+            lowered = res.strip().lower()
+            if lowered in {"true", "1"}:
+                return True
+            if lowered in {"false", "0", "", "null", "undefined"}:
+                return False
+        return bool(res)
 
     def save(self):
         """Saves active document"""
@@ -386,23 +454,36 @@ class AnimateServerStub:
             self.client.call('Animate.save')
         )
 
+    def save_workfile(self, image_path):
+        """Save the active document as the current workfile at ``image_path``."""
+        self.websocketserver.call(
+            self.client.call(
+                'Animate.save_workfile',
+                path=image_path,
+            )
+        )
+
+    def save_copy(self, image_path):
+        """Save a copy of the active document to ``image_path``."""
+        self.websocketserver.call(
+            self.client.call(
+                'Animate.save_copy',
+                path=image_path,
+            )
+        )
+
     def saveAs(self, image_path, ext, as_copy):
-        """Saves active document to psd (copy) or png or jpg
+        """Compatibility wrapper for legacy Animate saveAs calls.
 
         Args:
             image_path(string): full local path
-            ext: <string psd|jpg|png>
+            ext: file extension, typically ``fla`` for workfiles
             as_copy: <boolean>
         Returns: None
         """
-        self.websocketserver.call(
-            self.client.call(
-                'Animate.saveAs',
-                image_path=image_path,
-                ext=ext,
-                as_copy=as_copy
-            )
-        )
+        if as_copy:
+            return self.save_copy(image_path)
+        return self.save_workfile(image_path)
 
     @contextmanager
     def duplicate_document(self, path: str):
@@ -428,11 +509,7 @@ class AnimateServerStub:
             yield
         finally:
             # Save and close the duplicated document
-            self.saveAs(
-                image_path=str(path),
-                ext=path.suffix[1:],
-                as_copy=False
-            )
+            self.save_copy(str(path))
             self.close_document(document_id)
 
     def close_document(self, id: str):
@@ -507,12 +584,17 @@ class AnimateServerStub:
                 8 is layer(group) id - used for deletion, update etc.
         """
         res = self.websocketserver.call(self.client.call('Animate.read'))
+        if self._is_evalscript_error(res):
+            return []
         layers_data = []
+        if isinstance(res, str) and res.strip().lower() in {"", "null", "undefined"}:
+            return layers_data
         try:
             if res:
                 layers_data = json.loads(res)
         except json.decoder.JSONDecodeError:
-            raise ValueError("{} cannot be parsed, recreate meta".format(res))
+            print("{} cannot be parsed, returning empty metadata".format(res))
+            return []
         # format of metadata changed from {} to [] because of standardization
         # keep current implementation logic as its working
         if isinstance(layers_data, dict):
@@ -700,10 +782,26 @@ class AnimateServerStub:
         Returns:
             <list of FLAItem>
         """
-        try:
-            layers_data = json.loads(res)
-        except json.decoder.JSONDecodeError:
-            raise ValueError("Received broken JSON {}".format(res))
+        if res is None:
+            return []
+
+        if self._is_evalscript_error(res):
+            return []
+
+        if isinstance(res, str):
+            normalized = res.strip().lower()
+            if normalized in {"", "null", "undefined"}:
+                return []
+
+        # Some websocket paths may already return decoded objects.
+        if isinstance(res, (list, dict)):
+            layers_data = res
+        else:
+            try:
+                layers_data = json.loads(res)
+            except (json.decoder.JSONDecodeError, TypeError):
+                raise ValueError("Received broken JSON {}".format(res))
+
         ret = []
 
         # convert to AEItem to use dot donation

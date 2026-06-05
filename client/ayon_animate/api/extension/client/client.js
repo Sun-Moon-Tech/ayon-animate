@@ -3,42 +3,217 @@
     // consumes RPC calls from server (OpenPype) calls ./host/index.jsx and
     // returns values back (in json format)
 
-    var logReturn = function(result){ log.warn('Result: ' + result);};
+    var CEP_LOG_FILE = 'C:/scripts/ayon_animate_cep_client.log';
 
-    var csInterface = new CSInterface();
-
-    log.warn("script start");
-
-    WSRPC.DEBUG = true;
-    WSRPC.TRACE = true;
-
-    function myCallBack(){
-        log.warn("Triggered index.jsx");
+    function stringifyLogPart(value) {
+      if (typeof value === 'string') {
+        return value;
+      }
+      try {
+        return JSON.stringify(value);
+      } catch (e) {
+        return String(value);
+      }
     }
-    // importing through manifest.xml isn't working because relative paths
-    // possibly TODO
-    csInterface.evalScript('./host/index.jsx', myCallBack);
-    
+
+    function appendCepLog(level, args) {
+      try {
+        if (!window.cep || !window.cep.fs) {
+          return;
+        }
+
+        window.cep.fs.makedir('C:/scripts');
+
+        var parts = [];
+        for (var i = 0; i < args.length; i++) {
+          parts.push(stringifyLogPart(args[i]));
+        }
+
+        var line = '[' + (new Date()).toISOString() + '] [' + level + '] ' + parts.join(' ') + '\n';
+        var existing = window.cep.fs.readFile(CEP_LOG_FILE);
+        var content = '';
+        if (existing && existing.err === 0 && typeof existing.data === 'string') {
+          content = existing.data;
+        }
+        window.cep.fs.writeFile(CEP_LOG_FILE, content + line);
+      } catch (_) {
+        // Last-resort: never throw from logger path.
+      }
+    }
+
+    var __console = (typeof console !== 'undefined') ? console : null;
+    var __consoleWarn = (__console && __console.warn) ? __console.warn.bind(__console) : null;
+    var __consoleInfo = (__console && __console.info) ? __console.info.bind(__console) : null;
+    var __consoleDebug = (__console && __console.debug) ? __console.debug.bind(__console) : null;
+    var __consoleError = (__console && __console.error) ? __console.error.bind(__console) : null;
+
+    if (__console) {
+      __console.warn = function() {
+        appendCepLog('WARN', arguments);
+        if (__consoleWarn) {
+          __consoleWarn.apply(null, arguments);
+        }
+      };
+      __console.info = function() {
+        appendCepLog('INFO', arguments);
+        if (__consoleInfo) {
+          __consoleInfo.apply(null, arguments);
+        }
+      };
+      __console.debug = function() {
+        appendCepLog('DEBUG', arguments);
+        if (__consoleDebug) {
+          __consoleDebug.apply(null, arguments);
+        }
+      };
+      __console.error = function() {
+        appendCepLog('ERROR', arguments);
+        if (__consoleError) {
+          __consoleError.apply(null, arguments);
+        }
+      };
+    }
+
+    // Initialize log from loglevel.min.js, with fallback
+    var log = window.log || {
+      warn: function(msg) { if (typeof console !== 'undefined' && console.warn) console.warn(msg); },
+      debug: function(msg) { if (typeof console !== 'undefined' && console.debug) console.debug(msg); },
+      info: function(msg) { if (typeof console !== 'undefined' && console.info) console.info(msg); },
+      error: function(msg) { if (typeof console !== 'undefined' && console.error) console.error(msg); }
+    };
+
+    var logReturn = function(result){ log.warn('Result: ' + result);};
+    var csInterface = null;
+
+    function safeAlert(message) {
+        try {
+        if (typeof console !== 'undefined' && console.warn) {
+                console.warn(message);
+            }
+        } catch (e) {
+            try {
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('alert failed: ' + e);
+                }
+            } catch (_) {}
+        }
+    }
+
+    function startupClient() {
+        if (typeof CSInterface === 'undefined') {
+            safeAlert('Animate client startup error: CSInterface is undefined');
+            return;
+        }
+        if (typeof SystemPath === 'undefined') {
+            safeAlert('Animate client startup error: SystemPath is undefined');
+            return;
+        }
+        appendCepLog('INFO', ['Animate CEP client starting up.']);
+        csInterface = new CSInterface();
+        appendCepLog('INFO', ['CSInterface initialized.']);
+        var extensionRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
+        extensionRoot = extensionRoot.replace(/\\/g, '/');
+        appendCepLog('INFO', ['Animate CEP client starting at extension root: ' + extensionRoot]);
+
+        log.warn("script start");
+
+        WSRPC.DEBUG = true;
+        WSRPC.TRACE = true;
+
+    function loadHostScript() {
+      var hostScriptPath = extensionRoot + '/host/index.js';
+      appendCepLog('INFO', ['Loading host script from:', hostScriptPath]);
+      return new Promise(function(resolve, reject) {
+        if (!window.cep || !window.cep.fs) {
+          reject(new Error('CEP filesystem API is unavailable'));
+          return;
+        }
+
+        var fileResult = window.cep.fs.readFile(hostScriptPath);
+        if (!fileResult || fileResult.err !== 0 || typeof fileResult.data !== 'string') {
+          reject(new Error('Failed to read host/index.js (err=' + (fileResult && fileResult.err) + ')'));
+          return;
+        }
+
+        // Evaluate the host script contents once in Animate's host scripting context.
+        // This registers all functions (fileOpen, saveWorkfile, etc.) as globals in
+        // the host scope, so later csInterface.evalScript("fileOpen(...)") calls work.
+        csInterface.evalScript(fileResult.data, function(result) {
+          if (result === 'EvalScript error.') {
+            appendCepLog('ERROR', ['Host script eval failed']);
+            reject(new Error('Failed to evaluate host/index.js'));
+            return;
+          }
+          appendCepLog('INFO', ['Host script loaded successfully']);
+          resolve(result);
+        });
+      });
+    }
+
+    // Animate CEP can intermittently fail when evalScript calls overlap.
+    // Keep a single queue so every eval runs strictly in sequence.
+    var __evalQueue = Promise.resolve();
+
     function runEvalScript(script) {
-        // because of asynchronous nature of functions in jsx
-        // this waits for response
-        return new Promise(function(resolve, reject){
-            csInterface.evalScript(script, resolve);
+        function executeEval() {
+        var scriptText = String(script || '');
+        appendCepLog('DEBUG', ['runEvalScript begin', 'len=' + scriptText.length, 'script=' + scriptText]);
+        return new Promise(function(resolve){
+          csInterface.evalScript(scriptText, function(result) {
+            appendCepLog('DEBUG', ['runEvalScript end', 'result=' + String(result)]);
+            resolve(result);
+          });
+            });
+        }
+
+        var queued = __evalQueue.then(executeEval, executeEval);
+        __evalQueue = queued.then(function(){
+            return null;
+        }, function(){
+            return null;
+        });
+        return queued;
+    }
+    
+    function verifyHostApiSurface() {
+      return runEvalScript("(function(){return [typeof fileOpen,typeof saveWorkfile,typeof getHeadline].join('|');})()")
+        .then(function(result){
+          log.warn('Host API probe after load: ' + String(result));
+          return result;
         });
     }
 
     /** main entry point **/
-    startUp("WEBSOCKET_URL");
+    log.warn("Client script loading");
+    log.warn("WSRPC debugging enabled");
 
     // get websocket server url from environment value
-    async function startUp(url){
-        // log.warn("url", url);
-        // promis = runEvalScript("getEnv('" + url + "')");
 
-        // var res = await promis;
-        // run rest only after resolved promise
-        main(url);
+    function getWebsocketUrlFromNodeEnv() {
+      try {
+        if (typeof process !== "undefined" && process && process.env) {
+          return process.env.WEBSOCKET_URL || "";
+        }
+      } catch (err) {
+        log.warn("Node env lookup failed:", err);
+      }
+      return "";
     }
+
+    async function startUp(url) {
+      log.warn("startUp() using Node env lookup");
+      var res = getWebsocketUrlFromNodeEnv();
+
+      if (!res) {
+        log.warn("process.env.WEBSOCKET_URL missing, using fallback");
+        res = "ws://localhost:8098/ws/";
+      }
+
+      return verifyHostApiSurface().then(function() {
+        main(res);
+      });
+    }
+
 
     function get_extension_version(){
         /** Returns version number from extension manifest.xml **/
@@ -66,18 +241,31 @@
 
     function main(websocket_url){
       // creates connection to 'websocket_url', registers routes
-    //   log.warn("websocket_url", websocket_url);
+      log.warn("websocket_url", websocket_url);
       var default_url = 'ws://localhost:8099/ws/';
 
       if  (websocket_url == ''){
            websocket_url = default_url;
       }
-    //   log.warn("connecting to:", websocket_url);
+      log.warn("connecting to:", websocket_url);
       RPC = new WSRPC(websocket_url, 5000); // spin connection
+
+      // Add connection event handlers
+      RPC.onConnect = function() {
+        log.warn("RPC connection established successfully");
+      };
+      
+      RPC.onDisconnect = function() {
+        log.warn("RPC connection disconnected");
+      };
+      
+      RPC.onError = function(error) {
+        log.warn("RPC connection error:", error);
+      };
 
       RPC.connect();
 
-    //   log.warn("connected");
+      log.warn("RPC.connect() called");
 
       function EscapeStringForJSX(str){
       // Replaces:
@@ -87,34 +275,56 @@
       // See: https://stackoverflow.com/a/3967927/5285364
           return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
       }
+      
+      
 
       RPC.addRoute('Animate.open', function (data) {
-            //   log.warn('Server called client route "open":', data);
-              var escapedPath = EscapeStringForJSX(data.path);
-              return runEvalScript("fileOpen('" + escapedPath +"')")
-                  .then(function(result){
-                    //   log.warn("open: " + result);
-                      return result;
-                  });
+        appendCepLog('INFO', ['Animate.open route invoked', 'payload=' + JSON.stringify(data || {})]);
+        var openPath = String((data && data.path) || '');
+        appendCepLog('INFO', ['Animate.open route begin path:', openPath]);
+        var encodedPath = JSON.stringify(openPath);
+        return runEvalScript("fileOpen(" + encodedPath + ")")
+          .then(function(result){
+            appendCepLog('INFO', ['Animate.open route end result:', String(result)]);
+            return result;
+          }, function(error) {
+            appendCepLog('ERROR', ['Animate.open route failed:', String(error)]);
+            throw error;
+          });
+      });
+
+
+
+      RPC.addRoute('Animate.host_trace', function (data) {
+            var encodedMessage = JSON.stringify(String((data && data.message) || ''));
+            var traceScript = "(function(){try{var m=" + encodedMessage + ";if(typeof host_trace==='function'){host_trace(m);return true;}if(typeof fl!=='undefined'&&typeof fl.trace==='function'){fl.trace('host_trace: '+m);return true;}return false;}catch(e){return false;}})()";
+            return runEvalScript(traceScript, {
+                label: 'Animate.host_trace',
+                retryOnEvalError: false,
+                fallback: false
+              })
+                .then(function(result){
+                    return result;
+                });
       });
 
       RPC.addRoute('Animate.read', function (data) {
-            //   log.warn('Server called client route "read":', data);
-              return runEvalScript("getHeadline()")
+        appendCepLog('INFO', ['Animate.read route invoked', 'payload=' + JSON.stringify(data || {})]);
+        return runEvalScript("getHeadline()")
                   .then(function(result){
                     //   log.warn("getHeadline: " + result);
                       return result;
                   });
       });
 
-      RPC.addRoute('Animate.get_layers', function (data) {
-            //   log.warn('Server called client route "get_layers":', data);
-              return runEvalScript("getLayers()")
-                  .then(function(result){
-                    //   log.warn("getLayers: " + result);
-                      return result;
-                  });
-      });
+      // RPC.addRoute('Animate.get_layers', function (data) {
+      //       //   log.warn('Server called client route "get_layers":', data);
+      //         return runEvalScript("getLayers()")
+      //             .then(function(result){
+      //               //   log.warn("getLayers: " + result);
+      //                 return result;
+      //             });
+      // });
       RPC.addRoute('Animate.get_color_profile_name', function (data) {
             //   log.warn('Server called client route "get_color_profile_name":', data);
               return runEvalScript("getColorProfileName()")
@@ -165,19 +375,29 @@
       });
 
       RPC.addRoute('Animate.get_active_document_name', function (data) {
-            //   log.warn('Server called client route "get_active_document_name":',
-                        // data);
-              return runEvalScript("getActiveDocumentName()")
+        //   log.warn('Server called client route "get_active_document_name":',
+            // data);
+          return runEvalScript("getActiveDocumentName()")
                   .then(function(result){
                     //   log.warn("save: " + result);
                       return result;
                   });
       });
-
+      RPC.addRoute('Animate.export_png_sequence', function (data) {
+        return runEvalScript("(function(){var path=" + JSON.stringify(String(data.path || '')) + ";try{var p=String(path||'');if(!p){return false;}p=p.split('\\\\').join('/');if(typeof exportPngSequence==='function'){return !!exportPngSequence(p);}return false;}catch(e){return false;}})()", {
+          label: 'Animate.export_png_sequence',
+          retryOnEvalError: false,
+          fallback: ''
+        }).then(function(result){
+          //   log.warn("export_png_sequence: " + result);
+            return result;
+        });
+      });
       RPC.addRoute('Animate.get_active_document_full_name', function (data) {
             //   log.warn('Server called client route ' +
                     //    '"get_active_document_full_name":', data);
-              return runEvalScript("getActiveDocumentFullName()")
+          appendCepLog('INFO', ['Animate.get_active_document_full_name route invoked']);      
+          return runEvalScript("getActiveDocumentFullName()")
                   .then(function(result){
                     //   log.warn("save: " + result);
                       return result;
@@ -187,12 +407,32 @@
       RPC.addRoute('Animate.save', function (data) {
             //   log.warn('Server called client route "save":', data);
 
-              return runEvalScript("save()")
+          return runEvalScript("save()")
                   .then(function(result){
                     //   log.warn("save: " + result);
                       return result;
                   });
       });
+
+              RPC.addRoute('Animate.save_workfile', function (data) {
+                var encodedPath = JSON.stringify(String((data && data.path) || ''));
+                return runEvalScript("saveWorkfile(" + encodedPath + ")")
+                  .then(function(result){
+                    return result;
+                  });
+              });
+
+              RPC.addRoute('Animate.save_copy', function (data) {
+                var encodedPath = JSON.stringify(String((data && data.path) || ''));
+                return runEvalScript("saveCopy(" + encodedPath + ")", {
+                    label: 'Animate.save_copy',
+                    retryOnEvalError: false,
+                    fallback: false
+                  })
+                    .then(function(result){
+                      return result;
+                    });
+              });
 
       RPC.addRoute('Animate.get_selected_layers', function (data) {
             //   log.warn('Server called client route "get_selected_layers":', data);
@@ -311,9 +551,9 @@
       });
 
       RPC.addRoute('Animate.is_saved', function (data) {
-            //   log.warn('Server called client route "is_saved":', data);
+        //   log.warn('Server called client route "is_saved":', data);
 
-              return runEvalScript("isSaved()")
+          return runEvalScript("isSaved()")
                   .then(function(result){
                       log.warn("is_saved: " + result);
                       return result;
@@ -322,10 +562,15 @@
 
       RPC.addRoute('Animate.saveAs', function (data) {
             //   log.warn('Server called client route "saveAsJPEG":', data);
-              var escapedPath = EscapeStringForJSX(data.image_path);
-              return runEvalScript("saveAs('" + escapedPath + "', " +
-                                           "'" + data.ext + "', " +
-                                           data.as_copy + ")")
+              var encodedImagePath = JSON.stringify(String((data && data.image_path) || ''));
+              var encodedExt = JSON.stringify(String((data && data.ext) || ''));
+              var encodedAsCopy = (data && data.as_copy) ? 'true' : 'false';
+              var saveAsScript = "saveAs(" + encodedImagePath + "," + encodedExt + "," + encodedAsCopy + ")";
+              return runEvalScript(saveAsScript, {
+                    label: 'Animate.saveAs',
+                    retryOnEvalError: false,
+                    fallback: false
+                })
                   .then(function(result){
                     //   log.warn("save: " + result);
                       return result;
@@ -343,7 +588,12 @@
 
       RPC.addRoute('Animate.close_document', function (data) {
                 // log.warn('Server called client route "close_document":', data);
-                return runEvalScript("closeDocument("+data.id+")")
+            var encodedId = JSON.stringify(data && data.id !== undefined ? data.id : null);
+            return runEvalScript("(function(){var id="+encodedId+";try{if(typeof fl==='undefined'||!fl.getDocumentDOM){return false;}if(typeof closeDocument==='function'){var res=closeDocument(id);if(res!==undefined&&res!==null){return !!res;}}var doc=fl.getDocumentDOM();if(!doc||typeof doc.close!=='function'){return false;}try{doc.close(false);}catch(e1){doc.close();}return true;}catch(e){return false;}})()", {
+                label: 'Animate.close_document',
+                retryOnEvalError: false,
+                fallback: false
+              })
                     .then(function(result){
                         // log.warn("closed: " + result);
                         return result;
@@ -352,7 +602,11 @@
 
       RPC.addRoute('Animate.revert_to_previous', function (data) {
             // log.warn('Server called client route "revertToPrevious":', data);
-            return runEvalScript("revertToPrevious()")
+          return runEvalScript("(function(){try{if(typeof fl==='undefined'||!fl.getDocumentDOM){return false;}if(typeof revertToPrevious==='function'){var res=revertToPrevious();if(res!==undefined&&res!==null){return !!res;}}var doc=fl.getDocumentDOM();if(!doc){return false;}if(typeof doc.canRevert==='function'&& !doc.canRevert()){return true;}if(typeof doc.revert==='function'){doc.revert();return true;}return false;}catch(e){return false;}})()", {
+              label: 'Animate.revert_to_previous',
+              retryOnEvalError: false,
+              fallback: false
+            })
                 .then(function(result){
                     // log.warn("reverted: " + result);
                     return result;
@@ -376,7 +630,11 @@
 
       RPC.addRoute('Animate.close', function (data) {
         // log.warn('Server called client route "close":', data);
-        return runEvalScript("close()");
+        return runEvalScript("(function(){try{if(typeof fl==='undefined'||!fl.getDocumentDOM){return false;}if(typeof close==='function'){var res=close();if(res!==undefined&&res!==null){return !!res;}}var doc=fl.getDocumentDOM();if(!doc||typeof doc.close!=='function'){return false;}try{doc.close(false);}catch(e1){doc.close();}return true;}catch(e){return false;}})()", {
+          label: 'Animate.close',
+          retryOnEvalError: false,
+          fallback: false
+        });
       });
 
       RPC.addRoute('Animate.eval_code', function (data) {
@@ -388,16 +646,31 @@
 
       RPC.call('Animate.ping').then(function (data) {
         //   log.warn('Result for calling server route "ping": ', data);
-          return runEvalScript("ping()")
-                  .then(function(result){
-                    //   log.warn("ping: " + result);
-                      return result;
-                  });
+          log.warn('Animate.ping RPC handshake OK');
+          return true;
 
       }, function (error) {
-        //   log.warn(error);
+        log.warn("ERROR: RPC.call('Animate.ping') failed:", error);
       });
 
+    }
+
+    loadHostScript()
+      .then(function() {
+        return startUp('WEBSOCKET_URL');
+      })
+      .catch(function(error) {
+        log.error('Animate host initialization failed:', error);
+      });
+  }
+
+    try {
+      startupClient();
+    } catch (e) {
+        safeAlert('Animate client startup exception:\n' + e);
+        if (typeof console !== 'undefined' && console.error) {
+            console.error(e);
+        }
     }
 
     // log.warn("end script");

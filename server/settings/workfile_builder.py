@@ -31,3 +31,12 @@ class WorkfileBuilderPlugin(BaseSettingsModel):
         default_factory=CustomBuilderTemplate,
         title="Template profiles"
     )
+
+    save_new_workfile: bool = SettingsField(
+        True, 
+        title="Save new workfile after copying template",
+        description=(
+            "If enabled, the new workfile created from template location will"
+            " automatically be saved to Ayon. Can be locally overridden."
+        )
+    )

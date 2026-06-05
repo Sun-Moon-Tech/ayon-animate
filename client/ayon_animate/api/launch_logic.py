@@ -2,6 +2,7 @@ import os
 import subprocess
 import collections
 import asyncio
+import traceback
 
 from wsrpc_aiohttp import (
     WebSocketRoute,
@@ -29,6 +30,25 @@ from .webserver import WebServerTool
 from .ws_stub import AnimateServerStub
 
 log = Logger.get_logger(__name__)
+
+
+def debug_msgbox(title, message):
+    """Show a debug message box - useful for diagnostics."""
+    try:
+        from qtpy import QtWidgets, QtCore
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication([])
+        
+        msgbox = QtWidgets.QMessageBox()
+        msgbox.setWindowTitle(title)
+        msgbox.setText(message)
+        msgbox.setWindowModality(QtCore.Qt.ApplicationModal)
+        msgbox.exec_()  # Block until user clicks OK
+        return True
+    except Exception as e:
+        print(f"Could not show msgbox: {e}", flush=True)
+        return False
 
 
 console_window = None
@@ -101,11 +121,11 @@ def stub():
         Currently created when panel is opened (FLA: Window>Extensions>Avalon)
     :return: <AnimateClientStub> where functions could be called from
     """
-    ps_stub = AnimateServerStub()
-    if not ps_stub.client:
+    fla_stub = AnimateServerStub()
+    if not fla_stub.client:
         raise ConnectionNotEstablishedYet("Connection is not created yet")
 
-    return ps_stub
+    return fla_stub
 
 
 def show_tool_by_name(tool_name):
@@ -186,11 +206,19 @@ class ProcessLauncher(QtCore.QObject):
         return item
 
     def start(self):
-        if self._started:
-            return
-        self.log.info("Started launch logic of Animate")
-        self._started = True
-        self._start_process_timer.start()
+        try:
+            if self._started:
+                return
+            print(f"[AYON ANIMATE] ProcessLauncher.start() called", flush=True)
+            self.log.info("Started launch logic of Animate")
+            self._started = True
+            print(f"[AYON ANIMATE] Starting _start_process_timer", flush=True)
+            self._start_process_timer.start()
+            print(f"[AYON ANIMATE] ProcessLauncher.start() completed", flush=True)
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in start(): {e}", flush=True)
+            traceback.print_exc()
+            raise
 
     def exit(self):
         """ Exit whole application. """
@@ -209,52 +237,70 @@ class ProcessLauncher(QtCore.QObject):
         QtCore.QCoreApplication.exit()
 
     def _on_loop_timer(self):
-        # TODO find better way and catch errors
-        # Run only callbacks that are in queue at the moment
-        cls = self.__class__
-        for _ in range(len(cls._main_thread_callbacks)):
-            if cls._main_thread_callbacks:
-                item = cls._main_thread_callbacks.popleft()
-                item.execute()
+        try:
+            # TODO find better way and catch errors
+            # Run only callbacks that are in queue at the moment
+            cls = self.__class__
+            for _ in range(len(cls._main_thread_callbacks)):
+                if cls._main_thread_callbacks:
+                    item = cls._main_thread_callbacks.popleft()
+                    item.execute()
 
-        if not self.is_process_running:
-            self.log.info("Host process is not running. Closing")
-            self.exit()
+            if not self.is_process_running:
+                print(f"[AYON ANIMATE] _on_loop_timer: Process not running, exiting", flush=True)
+                self.log.info("Host process is not running. Closing")
+                self.exit()
 
-        elif not self.websocket_server_is_running:
-            self.log.info("Websocket server is not running. Closing")
+            elif not self.websocket_server_is_running:
+                print(f"[AYON ANIMATE] _on_loop_timer: Webserver not running, exiting", flush=True)
+                self.log.info("Websocket server is not running. Closing")
+                self.exit()
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in _on_loop_timer: {e}", flush=True)
+            traceback.print_exc()
             self.exit()
 
     def _on_start_process_timer(self):
-        # TODO add try except validations for each part in this method
-        # Start server as first thing
-        if self._websocket_server is None:
-            self._init_server()
-            return
+        try:
+            # TODO add try except validations for each part in this method
+            # Start server as first thing
+            if self._websocket_server is None:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Initializing server", flush=True)
+                self._init_server()
+                return
 
-        # TODO add waiting time
-        # Wait for webserver
-        if not self.websocket_server_is_running:
-            return
+            # TODO add waiting time
+            # Wait for webserver
+            if not self.websocket_server_is_running:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Waiting for webserver to start", flush=True)
+                return
 
-        # Start application process
-        if self._process is None:
-            self._start_process()
-            self.log.info("Waiting for host to connect")
-            return
+            # Start application process
+            if self._process is None:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Starting process", flush=True)
+                self._start_process()
+                self.log.info("Waiting for host to connect")
+                return
 
-        # TODO add waiting time
-        # Wait until host is connected
-        if self.is_host_connected:
-            self._start_process_timer.stop()
-            self._loop_timer.start()
-        elif (
-            not self.is_process_running
-            or not self.websocket_server_is_running
-        ):
+            # TODO add waiting time
+            # Wait until host is connected
+            if self.is_host_connected:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Host connected, stopping timer", flush=True)
+                self._start_process_timer.stop()
+                self._loop_timer.start()
+            elif (
+                not self.is_process_running
+                or not self.websocket_server_is_running
+            ):
+                print(f"[AYON ANIMATE] _on_start_process_timer: Process or webserver not running, exiting", flush=True)
+                self.exit()
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in _on_start_process_timer: {e}", flush=True)
+            traceback.print_exc()
             self.exit()
 
     def _init_server(self):
+        print(f"[AYON ANIMATE] _init_server called", flush=True)
         if self._websocket_server is not None:
             return
 
@@ -262,7 +308,9 @@ class ProcessLauncher(QtCore.QObject):
             "Initialization of websocket server for host communication"
         )
 
+        print(f"[AYON ANIMATE] Creating WebServerTool instance", flush=True)
         self._websocket_server = websocket_server = WebServerTool()
+        print(f"[AYON ANIMATE] WebServerTool created, checking if port occupied", flush=True)
         if websocket_server.port_occupied(
             websocket_server.host_name,
             websocket_server.port
@@ -283,19 +331,25 @@ class ProcessLauncher(QtCore.QObject):
             self.route_name, AnimateRoute
         )
         self.log.info("Starting websocket server for host communication")
+        print(f"[AYON ANIMATE] Calling websocket_server.start_server()", flush=True)
         websocket_server.start_server()
+        print(f"[AYON ANIMATE] websocket_server.start_server() returned", flush=True)
 
     def _start_process(self):
         if self._process is not None:
             return
+        print(f"[AYON ANIMATE] _start_process called with args: {self._subprocess_args}", flush=True)
         self.log.info("Starting host process")
         try:
+            print(f"[AYON ANIMATE] Launching subprocess: {self._subprocess_args}", flush=True)
             self._process = subprocess.Popen(
-                self._subprocess_args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                self._subprocess_args
+                # stdout=subprocess.DEVNULL,
+                # stderr=subprocess.DEVNULL
             )
-        except Exception:
+            print(f"[AYON ANIMATE] Subprocess launched with PID {self._process.pid}", flush=True)
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR launching subprocess: {e}", flush=True)
             self.log.info("exce", exc_info=True)
             self.exit()
 
@@ -333,6 +387,7 @@ class AnimateRoute(WebSocketRoute):
         # Python __init__ must be return "self".
         # This method might return anything.
         log.debug("someone called Animate route")
+        # Avoid modal UI from route handlers; it can stall CEP startup.
         self.instance = self
         return kwargs
 

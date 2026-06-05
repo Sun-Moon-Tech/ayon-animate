@@ -38,6 +38,7 @@ class WebServerTool:
     _instance = None
 
     def __init__(self):
+        print(f"[AYON ANIMATE] WebServerTool.__init__ starting", flush=True)
         WebServerTool._instance = self
 
         self.client = None
@@ -47,6 +48,7 @@ class WebServerTool:
         port = None
         host_name = "localhost"
         websocket_url = os.getenv("WEBSOCKET_URL")
+        print(f"[AYON ANIMATE] WEBSOCKET_URL env var = {websocket_url}", flush=True)
         if websocket_url:
             parsed = urllib.parse.urlparse(websocket_url)
             port = parsed.port
@@ -56,11 +58,13 @@ class WebServerTool:
 
         self.port = port
         self.host_name = host_name
+        print(f"[AYON ANIMATE] Webserver configured for {host_name}:{port}", flush=True)
 
         self.app = web.Application()
 
         # add route with multiple methods for single "external app"
         self.webserver_thread = WebServerThread(self, self.port)
+        print(f"[AYON ANIMATE] WebServerTool.__init__ completed", flush=True)
 
     def add_route(self, *args, **kwargs):
         self.app.router.add_route(*args, **kwargs)
@@ -179,27 +183,33 @@ class WebServerThread(threading.Thread):
         self.is_running = True
 
         try:
+            print(f"[AYON ANIMATE] WebServerThread.run() starting", flush=True)
             log.info("Starting web server")
             self.loop = asyncio.new_event_loop()  # create new loop for thread
             asyncio.set_event_loop(self.loop)
 
+            print(f"[AYON ANIMATE] Creating webserver on localhost:{self.port}", flush=True)
             self.loop.run_until_complete(self.start_server())
 
             websocket_url = "ws://localhost:{}/ws".format(self.port)
 
+            print(f"[AYON ANIMATE] Webserver running on URL: {websocket_url}", flush=True)
             log.debug(
                 "Running Websocket server on URL: \"{}\"".format(websocket_url)
             )
 
             asyncio.ensure_future(self.check_shutdown(), loop=self.loop)
+            print(f"[AYON ANIMATE] Starting event loop", flush=True)
             self.loop.run_forever()
-        except Exception:
+        except Exception as e:
             self.is_running = False
+            print(f"[AYON ANIMATE] ERROR in WebServerThread.run(): {e}", flush=True)
             log.warning(
                 "Websocket Server service has failed", exc_info=True
             )
             raise
         finally:
+            print(f"[AYON ANIMATE] WebServerThread.run() finally block", flush=True)
             self.loop.close()  # optional
 
             self.is_running = False

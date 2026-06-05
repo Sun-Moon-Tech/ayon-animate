@@ -1,4 +1,4 @@
-from ayon_photoshop.lib import FLAutoCreator
+from ayon_animate.lib import FLAutoCreator
 
 
 class WorkfileCreator(FLAutoCreator):

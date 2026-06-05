@@ -19,12 +19,15 @@
 			<DispatchInfo>
 				<Resources>
 				 <MainPath>./index.html</MainPath>
-				 <CEFCommandLine />
+				 <CEFCommandLine>
+				 	<Parameter>--enable-nodejs</Parameter>
+					<Parameter>--mixed-context</Parameter>
+
+				 </CEFCommandLine>
 				</Resources>
 				<Lifecycle>
 					<AutoVisible>true</AutoVisible>
                     <StartOn>
-                    <!-- Photoshop dispatches this event on startup -->
                     <Event>applicationActivate</Event>
                     <Event>com.adobe.csxs.events.ApplicationInitialized</Event>
                     <Event>documentAfterOpen</Event>

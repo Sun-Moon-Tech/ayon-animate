@@ -16,61 +16,100 @@ from .launch_logic import ProcessLauncher, stub
 log = Logger.get_logger(__name__)
 
 
+def debug_msgbox(title, message):
+    """Show a debug message box - useful for diagnostics."""
+    try:
+        from qtpy import QtWidgets, QtCore
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication([])
+        
+        msgbox = QtWidgets.QMessageBox()
+        msgbox.setWindowTitle(title)
+        msgbox.setText(message)
+        msgbox.setWindowModality(QtCore.Qt.ApplicationModal)
+        msgbox.exec_()  # Block until user clicks OK
+        return True
+    except Exception as e:
+        print(f"Could not show msgbox: {e}", flush=True)
+        return False
+
+
 def safe_excepthook(*args):
     traceback.print_exception(*args)
 
 
 def main(*subprocess_args):
-    from ayon_animate.api import AnimateHost
+    try:
+        print("[AYON ANIMATE] lib.main() called with args:", subprocess_args, flush=True)
+        
+        try:
+            from ayon_animate.api import AnimateHost
+            print("[AYON ANIMATE] AnimateHost imported successfully", flush=True)
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR importing AnimateHost: {e}", flush=True)
+            raise
 
-    host = AnimateHost()
-    install_host(host)
+        host = AnimateHost()
+        print("[AYON ANIMATE] AnimateHost instance created", flush=True)
+        install_host(host)
+        print("[AYON ANIMATE] Host installed", flush=True)
 
-    sys.excepthook = safe_excepthook
+        sys.excepthook = safe_excepthook
 
-    # coloring in StdOutBroker
-    os.environ["AYON_LOG_NO_COLORS"] = "0"
-    app = get_ayon_qt_app()
-    app.setQuitOnLastWindowClosed(False)
+        # coloring in StdOutBroker
+        os.environ["AYON_LOG_NO_COLORS"] = "0"
+        print("[AYON ANIMATE] Getting Qt app", flush=True)
+        app = get_ayon_qt_app()
+        print("[AYON ANIMATE] Qt app created", flush=True)
+        app.setQuitOnLastWindowClosed(False)
 
-    launcher = ProcessLauncher(subprocess_args)
-    launcher.start()
+        print("[AYON ANIMATE] Creating ProcessLauncher", flush=True)
+        launcher = ProcessLauncher(subprocess_args)
+        print("[AYON ANIMATE] Starting ProcessLauncher", flush=True)
+        launcher.start()
+        print("[AYON ANIMATE] ProcessLauncher started", flush=True)
 
-    env_workfiles_on_launch = os.getenv(
-        "AYON_ANIMATE_WORKFILES_ON_LAUNCH",
-        # Backwards compatibility
-        os.getenv("AVALON_ANIMATE_WORKFILES_ON_LAUNCH", True)
-    )
-    workfiles_on_launch = env_value_to_bool(value=env_workfiles_on_launch)
+        env_workfiles_on_launch = os.getenv(
+            "AYON_ANIMATE_WORKFILES_ON_LAUNCH",
+            # Backwards compatibility
+            os.getenv("AVALON_ANIMATE_WORKFILES_ON_LAUNCH", True)
+        )
+        workfiles_on_launch = env_value_to_bool(value=env_workfiles_on_launch)
+         
+        if is_in_tests():
+            manager = AddonsManager()
+            animate_addon = manager["animate"]
 
-    if is_in_tests():
-        manager = AddonsManager()
-        animate_addon = manager["animate"]
-
-        launcher.execute_in_main_thread(
-            functools.partial(
-                animate_addon.publish_in_test,
+            launcher.execute_in_main_thread(
+                functools.partial(
+                    animate_addon.publish_in_test,
+                    log,
+                    "CloseFLA",
+                )
+            )
+        elif env_value_to_bool("HEADLESS_PUBLISH"):
+            manager = AddonsManager()
+            webpublisher_addon = manager["webpublisher"]
+            launcher.execute_in_main_thread(
+                webpublisher_addon.headless_publish,
                 log,
                 "CloseFLA",
+                is_in_tests()
             )
-        )
-    elif env_value_to_bool("HEADLESS_PUBLISH"):
-        manager = AddonsManager()
-        webpublisher_addon = manager["webpublisher"]
-        launcher.execute_in_main_thread(
-            webpublisher_addon.headless_publish,
-            log,
-            "CloseFLA",
-            is_in_tests()
-        )
-    elif workfiles_on_launch:
+        elif workfiles_on_launch:
 
-        launcher.execute_in_main_thread(
-            host_tools.show_workfiles,
-            save=env_value_to_bool("WORKFILES_SAVE_AS")
-        )
+            launcher.execute_in_main_thread(
+                host_tools.show_workfiles,
+                save=env_value_to_bool("WORKFILES_SAVE_AS")
+            )
 
-    sys.exit(app.exec_())
+        print("[AYON ANIMATE] Entering Qt app event loop", flush=True)
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(f"[AYON ANIMATE] FATAL ERROR in lib.main(): {e}", flush=True)
+        traceback.print_exc()
+        sys.exit(1)
 
 
 @contextlib.contextmanager

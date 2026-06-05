@@ -11,9 +11,9 @@ from ayon_applications import PreLaunchHook, LaunchTypes
 
 class InstallAyonExtensionToAnimate(PreLaunchHook):
     """
-    Automatically 'installs' the AYON Photoshop extension.
+    Automatically 'installs' the Ayon Animate extension.
 
-    Checks if Photoshop already has the extension in the relevant folder,
+    Checks if Animate already has the extension in the relevant folder,
     will try to create that folder and unzip the extension if not.
     """
 

@@ -56,7 +56,6 @@ class AnimatePrelaunchHook(PreLaunchHook):
 
     def execute(self):
         # Pop executable
-        print("Hello Ayon")
         executable_path = self.launch_context.launch_args.pop(0)
 
         args = []
@@ -68,8 +67,6 @@ class AnimatePrelaunchHook(PreLaunchHook):
         new_launch_args = get_ayon_launcher_args(
             "run", script_path, executable_path
         )
-
-        #WHERE DOES THIS ENV VAR GET DEFINED IN THE FIRST INSTANCE?
         workfile_startup = self.data.get("workfile_startup", False)
         self.launch_context.env["AYON_ANIMATE_WORKFILES_ON_LAUNCH"] = (
             str(workfile_startup).lower()
