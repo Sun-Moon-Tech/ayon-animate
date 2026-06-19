@@ -1,5 +1,6 @@
 # ayon-animate
 Animate integration for Ayon
+Much of this stripped directly from the photoshop plugin, as far as a lot of the basic architecture and ayon integration is concerened. 
 
 
 Components: 
@@ -13,4 +14,3 @@ Client:
 
 
 
-        
