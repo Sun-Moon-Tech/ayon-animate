@@ -1,0 +1,493 @@
+import os
+import subprocess
+import collections
+import asyncio
+import traceback
+
+from wsrpc_aiohttp import (
+    WebSocketRoute,
+    WebSocketAsync
+)
+
+import ayon_api
+from qtpy import QtCore
+
+from ayon_core.lib import Logger
+from ayon_core.lib.events import emit_event
+from ayon_core.pipeline import (
+    registered_host,
+    Anatomy,
+)
+from ayon_core.pipeline.workfile import (
+    get_workfile_template_key_from_context,
+    get_last_workfile,
+)
+from ayon_core.pipeline.template_data import get_template_data_with_names
+from ayon_core.tools.utils import host_tools
+from ayon_core.pipeline.context_tools import change_current_context
+
+from .webserver import WebServerTool
+from .ws_stub import AnimateServerStub
+
+log = Logger.get_logger(__name__)
+
+
+def debug_msgbox(title, message):
+    """Show a debug message box - useful for diagnostics."""
+    try:
+        from qtpy import QtWidgets, QtCore
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            app = QtWidgets.QApplication([])
+        
+        msgbox = QtWidgets.QMessageBox()
+        msgbox.setWindowTitle(title)
+        msgbox.setText(message)
+        msgbox.setWindowModality(QtCore.Qt.ApplicationModal)
+        msgbox.exec_()  # Block until user clicks OK
+        return True
+    except Exception as e:
+        print(f"Could not show msgbox: {e}", flush=True)
+        return False
+
+
+console_window = None
+
+
+class ConnectionNotEstablishedYet(Exception):
+    pass
+
+
+class MainThreadItem:
+    """Structure to store information about callback in main thread.
+
+    Item should be used to execute callback in main thread which may be needed
+    for execution of Qt objects.
+
+    Item store callback (callable variable), arguments and keyword arguments
+    for the callback. Item hold information about it's process.
+    """
+    not_set = object()
+
+    def __init__(self, callback, *args, **kwargs):
+        self._done = False
+        self._exception = self.not_set
+        self._result = self.not_set
+        self._callback = callback
+        self._args = args
+        self._kwargs = kwargs
+
+    @property
+    def done(self):
+        return self._done
+
+    @property
+    def exception(self):
+        return self._exception
+
+    @property
+    def result(self):
+        return self._result
+
+    def execute(self):
+        """Execute callback and store its result.
+
+        Method must be called from main thread. Item is marked as `done`
+        when callback execution finished. Store output of callback of exception
+        information when callback raises one.
+        """
+        log.debug("Executing process in main thread")
+        if self.done:
+            log.warning("- item is already processed")
+            return
+
+        log.info("Running callback: {}".format(str(self._callback)))
+        try:
+            result = self._callback(*self._args, **self._kwargs)
+            self._result = result
+
+        except Exception as exc:
+            self._exception = exc
+
+        finally:
+            self._done = True
+
+
+def stub():
+    """
+        Convenience function to get server RPC stub to call methods directed
+        for host (Animate).
+        It expects already created connection, started from client.
+        Currently created when panel is opened (FLA: Window>Extensions>Avalon)
+    :return: <AnimateClientStub> where functions could be called from
+    """
+    fla_stub = AnimateServerStub()
+    if not fla_stub.client:
+        raise ConnectionNotEstablishedYet("Connection is not created yet")
+
+    return fla_stub
+
+
+def show_tool_by_name(tool_name):
+    kwargs = {}
+    if tool_name == "loader":
+        kwargs["use_context"] = True
+
+    host_tools.show_tool_by_name(tool_name, **kwargs)
+
+
+class ProcessLauncher(QtCore.QObject):
+    route_name = "Animate"
+    _main_thread_callbacks = collections.deque()
+
+    def __init__(self, subprocess_args):
+        self._subprocess_args = subprocess_args
+        self._log = None
+
+        super(ProcessLauncher, self).__init__()
+
+        # Keep track if launcher was already started
+        self._started = False
+
+        self._process = None
+        self._websocket_server = None
+
+        start_process_timer = QtCore.QTimer()
+        start_process_timer.setInterval(100)
+
+        loop_timer = QtCore.QTimer()
+        loop_timer.setInterval(200)
+
+        start_process_timer.timeout.connect(self._on_start_process_timer)
+        loop_timer.timeout.connect(self._on_loop_timer)
+
+        self._start_process_timer = start_process_timer
+        self._loop_timer = loop_timer
+
+    @property
+    def log(self):
+        if self._log is None:
+            self._log = Logger.get_logger(
+                "{}-launcher".format(self.route_name)
+            )
+        return self._log
+
+    @property
+    def websocket_server_is_running(self):
+        if self._websocket_server is not None:
+            return self._websocket_server.is_running
+        return False
+
+    @property
+    def is_process_running(self):
+        if self._process is not None:
+            return self._process.poll() is None
+        return False
+
+    @property
+    def is_host_connected(self):
+        """Returns True if connected, False if app is not running at all."""
+        if not self.is_process_running:
+            return False
+
+        try:
+            _stub = stub()
+            if _stub:
+                return True
+        except Exception:
+            pass
+
+        return None
+
+    @classmethod
+    def execute_in_main_thread(cls, callback, *args, **kwargs):
+        item = MainThreadItem(callback, *args, **kwargs)
+        cls._main_thread_callbacks.append(item)
+        return item
+
+    def start(self):
+        try:
+            if self._started:
+                return
+            print(f"[AYON ANIMATE] ProcessLauncher.start() called", flush=True)
+            self.log.info("Started launch logic of Animate")
+            self._started = True
+            print(f"[AYON ANIMATE] Starting _start_process_timer", flush=True)
+            self._start_process_timer.start()
+            print(f"[AYON ANIMATE] ProcessLauncher.start() completed", flush=True)
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in start(): {e}", flush=True)
+            traceback.print_exc()
+            raise
+
+    def exit(self):
+        """ Exit whole application. """
+        if self._start_process_timer.isActive():
+            self._start_process_timer.stop()
+        if self._loop_timer.isActive():
+            self._loop_timer.stop()
+
+        if self._websocket_server is not None:
+            self._websocket_server.stop()
+
+        if self._process:
+            self._process.kill()
+            self._process.wait()
+
+        QtCore.QCoreApplication.exit()
+
+    def _on_loop_timer(self):
+        try:
+            # TODO find better way and catch errors
+            # Run only callbacks that are in queue at the moment
+            cls = self.__class__
+            for _ in range(len(cls._main_thread_callbacks)):
+                if cls._main_thread_callbacks:
+                    item = cls._main_thread_callbacks.popleft()
+                    item.execute()
+
+            if not self.is_process_running:
+                print(f"[AYON ANIMATE] _on_loop_timer: Process not running, exiting", flush=True)
+                self.log.info("Host process is not running. Closing")
+                self.exit()
+
+            elif not self.websocket_server_is_running:
+                print(f"[AYON ANIMATE] _on_loop_timer: Webserver not running, exiting", flush=True)
+                self.log.info("Websocket server is not running. Closing")
+                self.exit()
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in _on_loop_timer: {e}", flush=True)
+            traceback.print_exc()
+            self.exit()
+
+    def _on_start_process_timer(self):
+        try:
+            # TODO add try except validations for each part in this method
+            # Start server as first thing
+            if self._websocket_server is None:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Initializing server", flush=True)
+                self._init_server()
+                return
+
+            # TODO add waiting time
+            # Wait for webserver
+            if not self.websocket_server_is_running:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Waiting for webserver to start", flush=True)
+                return
+
+            # Start application process
+            if self._process is None:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Starting process", flush=True)
+                self._start_process()
+                self.log.info("Waiting for host to connect")
+                return
+
+            # TODO add waiting time
+            # Wait until host is connected
+            if self.is_host_connected:
+                print(f"[AYON ANIMATE] _on_start_process_timer: Host connected, stopping timer", flush=True)
+                self._start_process_timer.stop()
+                self._loop_timer.start()
+            elif (
+                not self.is_process_running
+                or not self.websocket_server_is_running
+            ):
+                print(f"[AYON ANIMATE] _on_start_process_timer: Process or webserver not running, exiting", flush=True)
+                self.exit()
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR in _on_start_process_timer: {e}", flush=True)
+            traceback.print_exc()
+            self.exit()
+
+    def _init_server(self):
+        print(f"[AYON ANIMATE] _init_server called", flush=True)
+        if self._websocket_server is not None:
+            return
+
+        self.log.debug(
+            "Initialization of websocket server for host communication"
+        )
+
+        print(f"[AYON ANIMATE] Creating WebServerTool instance", flush=True)
+        self._websocket_server = websocket_server = WebServerTool()
+        print(f"[AYON ANIMATE] WebServerTool created, checking if port occupied", flush=True)
+        if websocket_server.port_occupied(
+            websocket_server.host_name,
+            websocket_server.port
+        ):
+            self.log.info(
+                "Server already running, sending actual context and exit."
+            )
+            asyncio.run(websocket_server.send_context_change(self.route_name))
+            self.exit()
+            return
+
+        # Add Websocket route
+        websocket_server.add_route("*", "/ws/", WebSocketAsync)
+        # Add after effects route to websocket handler
+
+        print("Adding {} route".format(self.route_name))
+        WebSocketAsync.add_route(
+            self.route_name, AnimateRoute
+        )
+        self.log.info("Starting websocket server for host communication")
+        print(f"[AYON ANIMATE] Calling websocket_server.start_server()", flush=True)
+        websocket_server.start_server()
+        print(f"[AYON ANIMATE] websocket_server.start_server() returned", flush=True)
+
+    def _start_process(self):
+        if self._process is not None:
+            return
+        print(f"[AYON ANIMATE] _start_process called with args: {self._subprocess_args}", flush=True)
+        self.log.info("Starting host process")
+        try:
+            print(f"[AYON ANIMATE] Launching subprocess: {self._subprocess_args}", flush=True)
+            self._process = subprocess.Popen(
+                self._subprocess_args
+                # stdout=subprocess.DEVNULL,
+                # stderr=subprocess.DEVNULL
+            )
+            print(f"[AYON ANIMATE] Subprocess launched with PID {self._process.pid}", flush=True)
+        except Exception as e:
+            print(f"[AYON ANIMATE] ERROR launching subprocess: {e}", flush=True)
+            self.log.info("exce", exc_info=True)
+            self.exit()
+
+
+def show_script_editor():
+    from ayon_core.tools.console_interpreter import InterpreterController
+    from ayon_core.tools.console_interpreter.ui import ConsoleInterpreterWindow
+
+    # Global so it doesn't get garbage collected instantly
+    global console_window
+    if console_window is None:
+        controller = InterpreterController(name="animate")
+        console_window = ConsoleInterpreterWindow(controller)
+        console_window.setWindowTitle("Python Script Editor - FLA")
+        console_window.setWindowFlags(
+            console_window.windowFlags() |
+            QtCore.Qt.Dialog |
+            QtCore.Qt.WindowMinimizeButtonHint)
+    console_window.show()
+    console_window.raise_()
+    console_window.activateWindow()
+
+
+class AnimateRoute(WebSocketRoute):
+    """
+        One route, mimicking external application (like Harmony, etc).
+        All functions could be called from client.
+        'do_notify' function calls function on the client - mimicking
+            notification after long running job on the server or similar
+    """
+    instance = None
+    _application_launched_emitted = False
+
+    def init(self, **kwargs):
+        # Python __init__ must be return "self".
+        # This method might return anything.
+        log.debug("someone called Animate route")
+        # Avoid modal UI from route handlers; it can stall CEP startup.
+        self.instance = self
+        return kwargs
+
+    # server functions
+    async def ping(self):
+        log.debug("someone called Animate route ping")
+        if not AnimateRoute._application_launched_emitted:
+            AnimateRoute._application_launched_emitted = True
+            ProcessLauncher.execute_in_main_thread(
+                lambda: emit_event("application.launched")
+            )
+
+    # This method calls function on the client side
+    # client functions
+    async def set_context(self, project, folder, task):
+        """
+            Sets 'project' and 'folder' to envs, eg. setting context.
+
+        Opens last workile from that context if exists.
+
+        Args:
+            project (str)
+            folder (str)
+            task (str
+        """
+        log.info("Setting context change")
+        log.info(f"project {project} folder {folder} task {task}")
+
+        folder_entity = ayon_api.get_folder_by_path(project, folder)
+        task_entity = ayon_api.get_task_by_name(
+            project, folder_entity["id"], task
+        )
+        change_current_context(folder_entity, task_entity)
+
+        last_workfile_path = self._get_last_workfile_path(project,
+                                                          folder,
+                                                          task)
+        if last_workfile_path and os.path.exists(last_workfile_path):
+            ProcessLauncher.execute_in_main_thread(
+                lambda: stub().open(last_workfile_path))
+
+
+    async def read(self):
+        log.debug("animate.read client calls server server calls "
+                  "animate client")
+        return await self.socket.call('animate.read')
+
+    # panel routes for tools
+    async def workfiles_route(self):
+        self._tool_route("workfiles")
+
+    async def loader_route(self):
+        self._tool_route("loader")
+
+    async def publish_route(self):
+        self._tool_route("publisher")
+
+    async def sceneinventory_route(self):
+        self._tool_route("sceneinventory")
+
+    async def experimental_tools_route(self):
+        self._tool_route("experimental_tools")
+
+    async def scripteditor_route(self):
+        ProcessLauncher.execute_in_main_thread(show_script_editor)
+
+    def _tool_route(self, _tool_name):
+        """The address accessed when clicking on the buttons."""
+
+        ProcessLauncher.execute_in_main_thread(show_tool_by_name, _tool_name)
+
+        # Required return statement.
+        return "nothing"
+
+    def _get_last_workfile_path(self, project_name, folder_path, task_name):
+        """Returns last workfile path if exists"""
+        host = registered_host()
+        host_name = "animate"
+        template_key = get_workfile_template_key_from_context(
+            project_name,
+            folder_path,
+            task_name,
+            host_name,
+        )
+        anatomy = Anatomy(project_name)
+
+        data = get_template_data_with_names(
+            project_name, folder_path, task_name, host_name
+        )
+        data["root"] = anatomy.roots
+
+        work_template = anatomy.get_template_item("work", template_key)
+
+        # Define saving file extension
+        extensions = host.get_workfile_extensions()
+
+        work_root = work_template["directory"].format_strict(data)
+        file_template = work_template["file"].template
+        last_workfile_path = get_last_workfile(
+            work_root, file_template, data, extensions, True
+        )
+
+        return last_workfile_path
