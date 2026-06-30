@@ -76,7 +76,7 @@ def main(*subprocess_args):
             os.getenv("AVALON_ANIMATE_WORKFILES_ON_LAUNCH", True)
         )
         workfiles_on_launch = env_value_to_bool(value=env_workfiles_on_launch)
-         
+        workfiles_on_launch = False #just for testing
         if is_in_tests():
             manager = AddonsManager()
             animate_addon = manager["animate"]

@@ -1,5 +1,6 @@
 from ayon_server.settings import BaseSettingsModel, SettingsField
 from .workfile_builder import WorkfileBuilderPlugin
+from .publish_plugins import PublishPlugins, DEFAULT_PUBLISH_SETTINGS
 
 
 class AnimateSettings(BaseSettingsModel):
@@ -16,10 +17,16 @@ class AnimateSettings(BaseSettingsModel):
         title="Workfile Builder"
     )
 
+    publish: PublishPlugins = SettingsField(
+        default_factory=PublishPlugins,
+        title="Publish Plugins Settings"
+    )
+
 DEFAULT_ANIMATE_SETTING = {
     "auto_install_extension": True,
     "workfile_builder": {
         "create_first_version": True,
         "custom_templates": []
-    }
+    },
+    "publish": DEFAULT_PUBLISH_SETTINGS
 }
