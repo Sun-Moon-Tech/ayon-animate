@@ -43,7 +43,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         output_path = os.path.join(staging_dir, output_basename)
 
         if not getattr(self, "swf_tasks", None):
-            self.log.info("No SWF tasks specified.")
+            raise RuntimeError("No SWF tasks specified in settings")
         
         self.render_source = getattr(self, "render_source", None)
         if not self.render_source:
@@ -75,12 +75,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
             # )
             # self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
         swf_output = None
-        self.log.info(f"Checking if SWF export is needed for task: {instance.data.get('task')}")
-        for task in self.swf_tasks:
-            if task.lower() == instance.data.get("task").lower():
-                swf_output = self.export_swf(output_path)
-                self.log.info(f"Exported SWF: {swf_output}")
-                break
+        if self.swf_tasks == instance.data.get("task"):
+            swf_output = self.export_swf(output_path)
+            self.log.info(f"Exported SWF: {swf_output}")
 
         frame_start = instance.data.get("frameStart", 0)
         frame_end = instance.data.get("frameEnd", 1)
