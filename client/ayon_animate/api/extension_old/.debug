@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionList>
+    <Extension Id="io.ynput.FLA.panel">
+        <HostList>
+            <Host Name="FLPR" Port="8078"/>
+        </HostList>
+    </Extension>
+</ExtensionList>

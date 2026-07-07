@@ -169,6 +169,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
         self._run_ffmpeg(args)
         return os.path.basename(mp4_path)
+        
     def _adjust_mov_paths(self, movie_output, staging_dir, basename):
         mov_path = os.path.join(staging_dir, f"{basename}.mov")
         if not os.path.exists(mov_path):
