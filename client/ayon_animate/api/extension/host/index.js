@@ -1,21 +1,26 @@
 host_trace = function(message) {
-    try {
-        fl.trace("host_trace: " + message);
-    } catch (_) {
-        // Never throw from logger path.
-        debugAlert("host_trace: failed trace" );
-    }
+    // Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
+
+    // try {
+    //     fl.trace("host_trace: " + message);
+    // } catch (_) {
+    //     // Never throw from logger path.
+    //     debugAlert("host_trace: failed trace" );
+    // }
+    return
 }
 
 debugAlert = function(message) {
-    fl.trace(message);
+    // Commented out to avoid annoying popups during normal operation. Uncomment for dev debugging.
+    // fl.trace(message);
+    return
 }
 
 fileOpen = function(path) {
     try {
-        fl.trace('fileOpen: begin path=' + String(path || ''));
+        host_trace('fileOpen: begin path=' + String(path || ''));
         if (typeof fl === 'undefined' || !fl.openDocument) {
-            fl.trace('fileOpen: end unavailable');
+            host_trace('fileOpen: end unavailable');
             return false;
         }
 
@@ -29,17 +34,17 @@ fileOpen = function(path) {
 
         try {
             fl.openDocument(uri);
-            fl.trace('fileOpen: end success uri=' + uri);
+            host_trace('fileOpen: end success uri=' + uri);
             return true;
         } catch (e1) {
             // Fallback: try the raw path as-is.
             fl.openDocument(p);
-            fl.trace('fileOpen: end success raw path=' + p);
+            host_trace('fileOpen: end success raw path=' + p);
             return true;
         }
     } catch (e) {
         try {
-            fl.trace('fileOpen: end failure ' + e);
+            host_trace('fileOpen: end failure ' + e);
         } catch (_) {}
         return false;
     }
@@ -63,27 +68,27 @@ _toAnimateUri = function(path) {
 save = function() {
     try {
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('save: fl.getDocumentDOM unavailable');
+            host_trace('save: fl.getDocumentDOM unavailable');
             return false;
         }
 
         var doc = fl.getDocumentDOM();
         if (!doc) {
-            fl.trace('save: no active document');
+            host_trace('save: no active document');
             return false;
         }
 
         if (typeof doc.save === 'function') {
             doc.save();
         } else {
-            fl.trace('save: no supported save method available');
+            host_trace('save: no supported save method available');
             return false;
         }
 
-        fl.trace('save: success');
+        host_trace('save: success');
         return true;
     } catch (e) {
-        fl.trace('save failed: ' + e);
+        host_trace('save failed: ' + e);
         return false;
     }
 }
@@ -91,73 +96,73 @@ save = function() {
 saveWorkfile = function(imagePath) {
     try {
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('saveWorkfile: fl.getDocumentDOM unavailable');
+            host_trace('saveWorkfile: fl.getDocumentDOM unavailable');
             return false;
         }
 
         var doc = fl.getDocumentDOM();
         if (!doc) {
-            fl.trace('saveWorkfile: no active document');
+            host_trace('saveWorkfile: no active document');
             return false;
         }
 
         var p = _normalizeAnimatePath(imagePath);
         if (!p) {
-            fl.trace('saveWorkfile: empty imagePath');
+            host_trace('saveWorkfile: empty imagePath');
             return false;
         }
 
         var currentPath = _normalizeAnimatePath(doc.path || doc.pathURI || '');
-        fl.trace('saveWorkfile currentPath: ' + currentPath);
-        fl.trace('saveWorkfile targetPath: ' + p);
+        host_trace('saveWorkfile currentPath: ' + currentPath);
+        host_trace('saveWorkfile targetPath: ' + p);
         if (currentPath && currentPath === p) {
-            fl.trace('saveWorkfile: target equals current path, delegating to save()');
+            host_trace('saveWorkfile: target equals current path, delegating to save()');
             return save();
         }
 
         if (typeof doc.saveAsCopy !== 'function') {
-            fl.trace('saveWorkfile: doc.saveAsCopy unavailable');
+            host_trace('saveWorkfile: doc.saveAsCopy unavailable');
             return false;
         }
 
         var uri = _toAnimateUri(p);
 
-        fl.trace('saveWorkfile uri: ' + uri);
-        fl.trace('saveWorkfile: starting saveAsCopy');
+        host_trace('saveWorkfile uri: ' + uri);
+        host_trace('saveWorkfile: starting saveAsCopy');
         try {
             doc.saveAsCopy(uri, false);
-            fl.trace('saveWorkfile: saveAsCopy(uri) succeeded');
+            host_trace('saveWorkfile: saveAsCopy(uri) succeeded');
         } catch (uriErr) {
-            fl.trace('saveWorkfile URI failed, trying raw path: ' + uriErr);
+            host_trace('saveWorkfile URI failed, trying raw path: ' + uriErr);
             doc.saveAsCopy(p, false);
-            fl.trace('saveWorkfile: saveAsCopy(raw path) succeeded');
+            host_trace('saveWorkfile: saveAsCopy(raw path) succeeded');
         }
 
         if (typeof doc.close !== 'function') {
-            fl.trace('saveWorkfile: doc.close unavailable');
+            host_trace('saveWorkfile: doc.close unavailable');
             return false;
         }
 
-        fl.trace('saveWorkfile: closing original document');
+        host_trace('saveWorkfile: closing original document');
         try {
             doc.close(false);
-            fl.trace('saveWorkfile: close(false) succeeded');
+            host_trace('saveWorkfile: close(false) succeeded');
         } catch (closeErr) {
-            fl.trace('saveWorkfile close(false) failed, trying close(): ' + closeErr);
+            host_trace('saveWorkfile close(false) failed, trying close(): ' + closeErr);
             doc.close();
-            fl.trace('saveWorkfile: close() succeeded');
+            host_trace('saveWorkfile: close() succeeded');
         }
 
-        fl.trace('saveWorkfile: reopening saved workfile');
+        host_trace('saveWorkfile: reopening saved workfile');
         var reopened = fileOpen(uri);
-        fl.trace('saveWorkfile: reopen via uri result=' + reopened);
+        host_trace('saveWorkfile: reopen via uri result=' + reopened);
         if (!reopened) {
             reopened = fileOpen(p);
-            fl.trace('saveWorkfile: reopen via raw path result=' + reopened);
+            host_trace('saveWorkfile: reopen via raw path result=' + reopened);
         }
         return reopened;
     } catch (e) {
-        fl.trace('saveWorkfile failed: ' + e);
+        host_trace('saveWorkfile failed: ' + e);
         return false;
     }
 }
@@ -165,30 +170,30 @@ saveWorkfile = function(imagePath) {
 saveCopy = function(imagePath) {
     try {
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('saveCopy: fl.getDocumentDOM unavailable');
+            host_trace('saveCopy: fl.getDocumentDOM unavailable');
             return false;
         }
 
         var doc = fl.getDocumentDOM();
         if (!doc) {
-            fl.trace('saveCopy: no active document');
+            host_trace('saveCopy: no active document');
             return false;
         }
 
         if (typeof doc.saveAsCopy !== 'function') {
-            fl.trace('saveCopy: doc.saveAsCopy unavailable');
+            host_trace('saveCopy: doc.saveAsCopy unavailable');
             return false;
         }
 
         var p = _normalizeAnimatePath(imagePath);
         if (!p) {
-            fl.trace('saveCopy: empty imagePath');
+            host_trace('saveCopy: empty imagePath');
             return false;
         }
 
         var uri = _toAnimateUri(p);
 
-        fl.trace('saveCopy: ' + p);
+        host_trace('saveCopy: ' + p);
         try {
             doc.saveAsCopy(uri, false);
             return true;
@@ -197,13 +202,13 @@ saveCopy = function(imagePath) {
             return true;
         }
     } catch (e) {
-        fl.trace('saveCopy failed: ' + e);
+        host_trace('saveCopy failed: ' + e);
         return false;
     }
 }
 
 saveAs = function(imagePath, ext, asCopy) {
-    fl.trace('saveAs compatibility wrapper ext=' + ext + ' asCopy=' + asCopy);
+    host_trace('saveAs compatibility wrapper ext=' + ext + ' asCopy=' + asCopy);
     if (asCopy) {
         return saveCopy(imagePath);
     }
@@ -212,19 +217,19 @@ saveAs = function(imagePath, ext, asCopy) {
 
 isSaved = function() {
     try {
-        fl.trace('isSaved: begin');
+        host_trace('isSaved: begin');
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('isSaved: fl.getDocumentDOM unavailable');
-            fl.trace('isSaved: end false (no fl/getDocumentDOM)');
+            host_trace('isSaved: fl.getDocumentDOM unavailable');
+            host_trace('isSaved: end false (no fl/getDocumentDOM)');
             return false;
         }
 
-        fl.trace('isSaved: calling fl.getDocumentDOM()');
+        host_trace('isSaved: calling fl.getDocumentDOM()');
         var doc = fl.getDocumentDOM();
-        fl.trace('isSaved: doc=' + (doc ? 'found' : 'missing'));
+        host_trace('isSaved: doc=' + (doc ? 'found' : 'missing'));
         if (!doc) {
-            fl.trace('isSaved: no active document');
-            fl.trace('isSaved: end false (no doc)');
+            host_trace('isSaved: no active document');
+            host_trace('isSaved: end false (no doc)');
             return false;
         }
 
@@ -233,57 +238,57 @@ isSaved = function() {
         var docPathUri = null;
 
         try {
-            fl.trace('isSaved: reading doc.path');
+            host_trace('isSaved: reading doc.path');
             docPath = doc.path;
-            fl.trace('isSaved: doc.path=' + String(docPath));
+            host_trace('isSaved: doc.path=' + String(docPath));
         } catch (pathErr) {
-            fl.trace('isSaved: doc.path read failed: ' + pathErr);
+            host_trace('isSaved: doc.path read failed: ' + pathErr);
         }
 
         try {
-            fl.trace('isSaved: reading doc.pathURI');
+            host_trace('isSaved: reading doc.pathURI');
             docPathUri = doc.pathURI;
-            fl.trace('isSaved: doc.pathURI=' + String(docPathUri));
+            host_trace('isSaved: doc.pathURI=' + String(docPathUri));
         } catch (pathUriErr) {
-            fl.trace('isSaved: doc.pathURI read failed: ' + pathUriErr);
+            host_trace('isSaved: doc.pathURI read failed: ' + pathUriErr);
         }
 
         var hasPath = !!(docPath || docPathUri);
-        fl.trace('isSaved: hasPath=' + hasPath);
+        host_trace('isSaved: hasPath=' + hasPath);
         if (!hasPath) {
-            fl.trace('isSaved: document has no path yet (never saved)');
-            fl.trace('isSaved: end false (unsaved new doc)');
+            host_trace('isSaved: document has no path yet (never saved)');
+            host_trace('isSaved: end false (unsaved new doc)');
             return false;
         }
 
-        fl.trace('isSaved: typeof doc.canRevert=' + typeof doc.canRevert);
+        host_trace('isSaved: typeof doc.canRevert=' + typeof doc.canRevert);
         if (typeof doc.canRevert === 'function') {
             var canRevert = null;
             try {
-                fl.trace('isSaved: calling doc.canRevert()');
+                host_trace('isSaved: calling doc.canRevert()');
                 canRevert = doc.canRevert();
-                fl.trace('isSaved: doc.canRevert()=' + String(canRevert));
+                host_trace('isSaved: doc.canRevert()=' + String(canRevert));
             } catch (canRevertErr) {
-                fl.trace('isSaved: doc.canRevert() failed: ' + canRevertErr);
-                fl.trace('isSaved: end false (canRevert failure)');
+                host_trace('isSaved: doc.canRevert() failed: ' + canRevertErr);
+                host_trace('isSaved: end false (canRevert failure)');
                 return false;
             }
 
             // If document can revert, there are unsaved changes.
             var savedState = !canRevert;
-            fl.trace('isSaved via canRevert: ' + savedState);
-            fl.trace('isSaved: end ' + savedState + ' (via canRevert)');
+            host_trace('isSaved via canRevert: ' + savedState);
+            host_trace('isSaved: end ' + savedState + ' (via canRevert)');
             return savedState;
         }
 
-        // If canRevert is unavailable, treat a path-bearing document as saved.
-        fl.trace('isSaved: fallback true (path exists, no canRevert)');
-        fl.trace('isSaved: end true (fallback)');
+        // If can Revert is unavailable, treat a path-bearing document as saved.
+        host_trace('isSaved: fallback true (path exists, no canRevert)');
+        host_trace('isSaved: end true (fallback)');
         return true;
     } catch (e) {
-        fl.trace('isSaved failed: ' + e);
+        host_trace('isSaved failed: ' + e);
         try {
-            fl.trace('isSaved: end false (exception)');
+            host_trace('isSaved: end false (exception)');
         } catch (_) {}
         return false;
     }
@@ -291,74 +296,74 @@ isSaved = function() {
 
 getActiveDocumentFullName = function() {
     try {
-        fl.trace('getActiveDocumentFullName: begin');
+        host_trace('getActiveDocumentFullName: begin');
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('getActiveDocumentFullName: fl.getDocumentDOM unavailable');
-            fl.trace('getActiveDocumentFullName: end unavailable');
+            host_trace('getActiveDocumentFullName: fl.getDocumentDOM unavailable');
+            host_trace('getActiveDocumentFullName: end unavailable');
             return null;
         }
 
         var doc = fl.getDocumentDOM();
-        fl.trace('getActiveDocumentFullName: doc=' + (doc ? 'found' : 'missing'));
+        host_trace('getActiveDocumentFullName: doc=' + (doc ? 'found' : 'missing'));
         if (!doc) {
-            fl.trace('getActiveDocumentFullName: no active document');
-            fl.trace('getActiveDocumentFullName: end no document');
+            host_trace('getActiveDocumentFullName: no active document');
+            host_trace('getActiveDocumentFullName: end no document');
             return null;
         }
 
         var fullName = null;
 
         try {
-            fl.trace('getActiveDocumentFullName: reading doc.path');
+            host_trace('getActiveDocumentFullName: reading doc.path');
             fullName = doc.path;
-            fl.trace('getActiveDocumentFullName: doc.path value=' + String(fullName));
+            host_trace('getActiveDocumentFullName: doc.path value=' + String(fullName));
         } catch (pathErr) {
-            fl.trace('getActiveDocumentFullName: doc.path failed: ' + pathErr);
+            host_trace('getActiveDocumentFullName: doc.path failed: ' + pathErr);
             try {
-                fl.trace('getActiveDocumentFullName: doc.path failed ' + pathErr);
+                host_trace('getActiveDocumentFullName: doc.path failed ' + pathErr);
             } catch (_) {}
         }
 
         if (!fullName) {
             try {
-                fl.trace('getActiveDocumentFullName: reading doc.pathURI');
+                host_trace('getActiveDocumentFullName: reading doc.pathURI');
                 fullName = doc.pathURI;
-                fl.trace('getActiveDocumentFullName: doc.pathURI value=' + String(fullName));
+                host_trace('getActiveDocumentFullName: doc.pathURI value=' + String(fullName));
             } catch (pathUriErr) {
-                fl.trace('getActiveDocumentFullName: doc.pathURI failed: ' + pathUriErr);
+                host_trace('getActiveDocumentFullName: doc.pathURI failed: ' + pathUriErr);
                 try {
-                    fl.trace('getActiveDocumentFullName: doc.pathURI failed ' + pathUriErr);
+                    host_trace('getActiveDocumentFullName: doc.pathURI failed ' + pathUriErr);
                 } catch (_) {}
             }
         }
 
         if (!fullName) {
             try {
-                fl.trace('getActiveDocumentFullName: reading doc.fullName');
+                host_trace('getActiveDocumentFullName: reading doc.fullName');
                 fullName = doc.fullName;
-                fl.trace('getActiveDocumentFullName: doc.fullName value=' + String(fullName));
+                host_trace('getActiveDocumentFullName: doc.fullName value=' + String(fullName));
             } catch (fullNameErr) {
-                fl.trace('getActiveDocumentFullName: doc.fullName failed: ' + fullNameErr);
+                host_trace('getActiveDocumentFullName: doc.fullName failed: ' + fullNameErr);
                 try {
-                    fl.trace('getActiveDocumentFullName: doc.fullName failed ' + fullNameErr);
+                    host_trace('getActiveDocumentFullName: doc.fullName failed ' + fullNameErr);
                 } catch (_) {}
             }
         }
 
         if (!fullName) {
-            fl.trace('getActiveDocumentFullName: no saved path available');
-            fl.trace('getActiveDocumentFullName: end no path');
+            host_trace('getActiveDocumentFullName: no saved path available');
+            host_trace('getActiveDocumentFullName: end no path');
             return null;
         }
 
         // evalScript return transport can break on raw Windows backslashes.
         // Normalize to forward slashes before returning to panel context.
         var safeFullName = String(fullName).replace(/\\/g, '/');
-        fl.trace('getActiveDocumentFullName: end path=' + safeFullName);
+        host_trace('getActiveDocumentFullName: end path=' + safeFullName);
         return safeFullName;
     } catch (e) {
         try {
-            fl.trace('getActiveDocumentFullName: end failure ' + e);
+            host_trace('getActiveDocumentFullName: end failure ' + e);
         } catch (_) {}
         return null;
     }
@@ -375,10 +380,10 @@ getActiveDocumentName = function() {
         var pathParts = normalizedPath.split('/');
         var name = pathParts[pathParts.length - 1] || null;
 
-        fl.trace('getActiveDocumentName: ' + name);
+        host_trace('getActiveDocumentName: ' + name);
         return name;
     } catch (e) {
-        fl.trace('getActiveDocumentName failed: ' + e);
+        host_trace('getActiveDocumentName failed: ' + e);
         return null;
     }
 }
@@ -387,21 +392,21 @@ getHeadline = function() {
     // Metadata is stored in doc.description rather than XMP getMetadata() which can crash on empty docs.
     try {
         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-            fl.trace('getHeadline: fl.getDocumentDOM unavailable');
+            host_trace('getHeadline: fl.getDocumentDOM unavailable');
             return '';
         }
 
         var doc = fl.getDocumentDOM();
         if (!doc) {
-            fl.trace('getHeadline: no active document');
+            host_trace('getHeadline: no active document');
             return '';
         }
 
         var headline = doc.description || '';
-        fl.trace('getHeadline: ' + headline);
+        host_trace('getHeadline: ' + headline);
         return headline;
     } catch (e) {
-        fl.trace('getHeadline failed: ' + e);
+        host_trace('getHeadline failed: ' + e);
         return '';
     }
 }
@@ -410,7 +415,7 @@ imprint = function(payload) {
     // Store AYON instance/container metadata as a JSON string in doc.description
     var doc = fl.getDocumentDOM();
     doc.description = String(payload || '');
-    fl.trace("imprinted metadata: " + doc.description);
+    host_trace("imprinted metadata: " + doc.description);
 
     return true;
 }
@@ -423,16 +428,16 @@ getImprint = function() {
 testMetadataAndImprint = function() {
     var doc = fl.getDocumentDOM();
 
-    fl.trace("initial description: " + doc.description);
+    host_trace("initial description: " + doc.description);
     var testData = {
         timestamp: String(new Date()),
         random: Math.random()
     };
     doc.description = String(testData);
 
-    fl.trace("stored description: ");
+    host_trace("stored description: ");
     for (var k in testData) {
-    fl.trace(k + ": " + testData[k]);
+    host_trace(k + ": " + testData[k]);
 };
 }
 
@@ -441,10 +446,10 @@ setPublishSettings = function(opts) {
     
     var doc = fl.getDocumentDOM();
     var profile = doc.exportPublishProfileString();
-    //fl.trace("Current publish profile: " + profile);
+    //host_trace("Current publish profile: " + profile);
     var newProfile = setPngPublishSettings(profile, opts.png);
     newProfile = setSwfPublishSettings(newProfile, opts.swf);
-    fl.trace("New publish profile: " + newProfile);
+    host_trace("New publish profile: " + newProfile);
     doc.importPublishProfileString(newProfile);
 }
 
@@ -688,23 +693,19 @@ replacePublishPngProperties = function(profileXml, opts) {
     return newProfile;
 }
 exportSwf = function(path) {
-    fl.trace("exportSwf called");
+    fl.trace( "exporting to file:///" + path + ".swf" );
     var doc = fl.getDocumentDOM();
     
-    //fl.trace("exportSwf doc: " + (doc ? "found" : "not found"));
     if (doc) {
         doc.exportSWF("file:///" + path + ".swf", true, false);
-        //fl.trace("exportSwf success: " + path);
         return true;      
     }
     return false;
 }
 
-exportMovie = function(path) {
-    fl.trace("exportMovie called");
+exportMovie = function(path,includeAlpha) {
     var doc = fl.getDocumentDOM();
     
-    fl.trace("exportMovie doc: " + (doc ? "found" : "not found"));
     if (doc) {
         var uri = _toAnimateUri(path + ".mov");
         var frame_count = 0;
@@ -715,34 +716,33 @@ exportMovie = function(path) {
                 frame_count = Number(timeline.frameCount) || 0;
             }
         } catch (timelineErr) {
-            fl.trace("exportMovie timeline read failed: " + timelineErr);
+            host_trace("exportMovie timeline read failed: " + timelineErr);
         }
 
         if (frame_count > 0) {
-            doc.exportVideo(uri, false, false, true, frame_count);
+            doc.exportVideo(uri, false, includeAlpha, true, frame_count);
         } else {
-            doc.exportVideo(uri, false, false, true, 0);
+            doc.exportVideo(uri, false, includeAlpha, true, 0);
         }
 
-        fl.trace("exportMovie success: " + path + " frame_count=" + frame_count);
         return true;
     }
 }
 
 
 exportPngSequence = function(path) {
-    fl.trace("exportPngSequence called");
+    host_trace("exportPngSequence called");
     var doc = fl.getDocumentDOM();
 
-    fl.trace("exportPngSequence doc: " + (doc ? "found" : "not found"));
+    host_trace("exportPngSequence doc: " + (doc ? "found" : "not found"));
 
     try {
         doc.exportPNG("file:///" + path + ".png", true, false);
-        fl.trace("exportPngSequence success: " + path);
+        host_trace("exportPngSequence success: " + path);
         return true;
     }
     catch (e) {
-        fl.trace("export failed: " + e);
+        host_trace("export failed: " + e);
     }
 
 }
@@ -752,13 +752,13 @@ exportPngSequence = function(path) {
 // function getSelectedLayers() {
 //     try {
 //         if (typeof fl === 'undefined' || !fl.getDocumentDOM) {
-//             fl.trace('getSelectedLayers: fl.getDocumentDOM unavailable');
+//             host_trace('getSelectedLayers: fl.getDocumentDOM unavailable');
 //             return [];
 //         }
 
 //         var doc = fl.getDocumentDOM();
 //         if (!doc) {
-//             fl.trace('getSelectedLayers: no active document');
+//             host_trace('getSelectedLayers: no active document');
 //             return [];
 //         }
 
@@ -772,15 +772,15 @@ exportPngSequence = function(path) {
 //                         selectedLayers.push(layer.name);
 //                     }
 //                 }
-//                 fl.trace('getSelectedLayers: ' + selectedLayers.length + ' layers selected');
+//                 host_trace('getSelectedLayers: ' + selectedLayers.length + ' layers selected');
 //                 return selectedLayers;
 //             }
 //         }
 
-//         fl.trace('getSelectedLayers: no timeline or layers found');
+//         host_trace('getSelectedLayers: no timeline or layers found');
 //         return [];
 //     } catch (e) {
-//         fl.trace('getSelectedLayers failed: ' + e);
+//         host_trace('getSelectedLayers failed: ' + e);
 //         return [];
 //     }
 // }

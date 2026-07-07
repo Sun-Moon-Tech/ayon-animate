@@ -121,7 +121,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
     def export_movie(self, output_path):
         export_path = str(output_path).replace("\\", "/")
-        return animate.stub().export_movie(export_path)
+        include_alpha = False ## for now this is hard-coded
+        return animate.stub().export_movie(export_path,include_alpha)
 
     def export_swf(self, output_path):
         export_path = str(output_path).replace("\\", "/")
