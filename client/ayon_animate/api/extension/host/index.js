@@ -727,6 +727,7 @@ exportMovie = function(path,includeAlpha) {
 
         return true;
     }
+    return true;
 }
 
 
