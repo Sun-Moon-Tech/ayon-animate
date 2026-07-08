@@ -704,30 +704,34 @@ exportSwf = function(path) {
 }
 
 exportMovie = function(path,includeAlpha) {
-    var doc = fl.getDocumentDOM();
-    
-    if (doc) {
-        var uri = _toAnimateUri(path + ".mov");
-        var frame_count = 0;
+    try {
+        var doc = fl.getDocumentDOM();
+        
+        if (doc) {
+            var uri = _toAnimateUri(path + ".mov");
+            var frame_count = 0;
 
-        try {
-            var timeline = doc.getTimeline();
-            if (timeline && timeline.frameCount) {
-                frame_count = Number(timeline.frameCount) || 0;
+            try {
+                var timeline = doc.getTimeline();
+                if (timeline && timeline.frameCount) {
+                    frame_count = Number(timeline.frameCount) || 0;
+                }
+            } catch (timelineErr) {
+                host_trace("exportMovie timeline read failed: " + timelineErr);
             }
-        } catch (timelineErr) {
-            host_trace("exportMovie timeline read failed: " + timelineErr);
-        }
 
-        if (frame_count > 0) {
-            doc.exportVideo(uri, false, includeAlpha, true, frame_count);
-        } else {
-            doc.exportVideo(uri, false, includeAlpha, true, 0);
-        }
+            if (frame_count > 0) {
+                doc.exportVideo(uri, false, includeAlpha, true, frame_count);
+            } else {
+                doc.exportVideo(uri, false, includeAlpha, true, 0);
+            }
 
-        return true;
+            return true;
+        }
+    } catch (exportErr) {
+        host_trace( "exportMovie failed: " + exportErr );
+        return false;
     }
-    return true;
 }
 
 

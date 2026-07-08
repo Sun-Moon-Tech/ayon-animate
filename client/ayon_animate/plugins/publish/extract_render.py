@@ -68,12 +68,14 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.info(f"Exporting mov to {staging_dir}")
             movie = self.export_movie(output_path)
             video_output = self._adjust_mov_paths(movie, staging_dir, output_basename)
-            # mp4_output = self._convert_movie_to_mp4(
-            #     movie_output,
-            #     staging_dir,
-            #     output_basename,
-            # )
-            # self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
+            mp4_output = self._convert_movie_to_mp4(
+                video_output,
+                staging_dir,
+                output_basename,
+            )
+            self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
+            ## placeholder, really lazy way to remove the mov to save space
+            os.remove( video_output )
         swf_output = None
         if self.swf_tasks == instance.data.get("task"):
             swf_output = self.export_swf(output_path)
@@ -84,9 +86,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
         
         # This is where we define the representations for the extracted media. Can change this to include the mp4 option instead or as well. 
         representation = {
-            "name": "mov",
-            "ext": "mov",
-            "files": video_output,
+            # "name": "mov",
+            # "ext": "mov",
+            # "files": video_output,
+            "name": "mp4",
+            "ext": "mp4",
+            "files": mp4_output,
             "stagingDir": staging_dir,
             "frameStart": frame_start,
             "frameEnd": frame_end,
