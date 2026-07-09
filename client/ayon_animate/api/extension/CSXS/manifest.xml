@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest ExtensionBundleId="io.ynput.FLA.panel" ExtensionBundleVersion="1.0.00" Version="7.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest ExtensionBundleId="io.ynput.FLA.panel" ExtensionBundleVersion="1.0.01" Version="7.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 	<ExtensionList>
-		<Extension Id="io.ynput.FLA.panel" Version="0.0.1" />
+		<Extension Id="io.ynput.FLA.panel" Version="1.0.0" />
 	</ExtensionList>
 	<ExecutionEnvironment>
 		<HostList>

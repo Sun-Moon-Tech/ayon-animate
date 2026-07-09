@@ -101,14 +101,19 @@
 
     function startupClient() {
         if (typeof CSInterface === 'undefined') {
+            safeAlert('Animate client startup error: CSInterface is undefined');
             return;
         }
         if (typeof SystemPath === 'undefined') {
+            safeAlert('Animate client startup error: SystemPath is undefined');
             return;
         }
+        appendCepLog('INFO', ['Animate CEP client starting up.']);
         csInterface = new CSInterface();
+        appendCepLog('INFO', ['CSInterface initialized.']);
         var extensionRoot = csInterface.getSystemPath(SystemPath.EXTENSION);
         extensionRoot = extensionRoot.replace(/\\/g, '/');
+        appendCepLog('INFO', ['Animate CEP client starting at extension root: ' + extensionRoot]);
 
         log.warn("script start");
 
@@ -117,6 +122,7 @@
 
     function loadHostScript() {
       var hostScriptPath = extensionRoot + '/host/index.js';
+      appendCepLog('INFO', ['Loading host script from:', hostScriptPath]);
       return new Promise(function(resolve, reject) {
         if (!window.cep || !window.cep.fs) {
           reject(new Error('CEP filesystem API is unavailable'));
@@ -134,9 +140,11 @@
         // the host scope, so later csInterface.evalScript("fileOpen(...)") calls work.
         csInterface.evalScript(fileResult.data, function(result) {
           if (result === 'EvalScript error.') {
+            appendCepLog('ERROR', ['Host script eval failed']);
             reject(new Error('Failed to evaluate host/index.js'));
             return;
           }
+          appendCepLog('INFO', ['Host script loaded successfully']);
           resolve(result);
         });
       });
@@ -149,8 +157,10 @@
     function runEvalScript(script) {
         function executeEval() {
         var scriptText = String(script || '');
+        appendCepLog('DEBUG', ['runEvalScript begin', 'len=' + scriptText.length, 'script=' + scriptText]);
         return new Promise(function(resolve){
           csInterface.evalScript(scriptText, function(result) {
+            appendCepLog('DEBUG', ['runEvalScript end', 'result=' + String(result)]);
             resolve(result);
           });
             });
@@ -168,6 +178,7 @@
     function verifyHostApiSurface() {
       return runEvalScript("(function(){return [typeof fileOpen,typeof saveWorkfile,typeof getHeadline].join('|');})()")
         .then(function(result){
+          log.warn('Host API probe after load: ' + String(result));
           return result;
         });
     }
@@ -385,7 +396,8 @@
 
       RPC.addRoute('Animate.export_movie', function (data) {
         var encodedPath = JSON.stringify(String((data && data.path) || ''));
-        return runEvalScript("exportMovie(" + encodedPath + ")")
+        var includeAlpha = JSON.stringify(String((data && data.include_alpha) || ''));
+        return runEvalScript("exportMovie(" + encodedPath + "," + includeAlpha + ")")
       })
 
       RPC.addRoute('Animate.export_swf', function (data) {

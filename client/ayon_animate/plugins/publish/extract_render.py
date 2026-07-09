@@ -121,7 +121,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
     def export_movie(self, output_path):
         export_path = str(output_path).replace("\\", "/")
-        return animate.stub().export_movie(export_path)
+        include_alpha = False ## for now this is hard-coded
+        return animate.stub().export_movie(export_path,include_alpha)
 
     def export_swf(self, output_path):
         export_path = str(output_path).replace("\\", "/")
@@ -169,6 +170,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
         self._run_ffmpeg(args)
         return os.path.basename(mp4_path)
+        
     def _adjust_mov_paths(self, movie_output, staging_dir, basename):
         mov_path = os.path.join(staging_dir, f"{basename}.mov")
         if not os.path.exists(mov_path):
