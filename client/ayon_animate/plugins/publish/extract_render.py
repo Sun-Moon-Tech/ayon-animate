@@ -27,7 +27,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         return animate.stub().host_trace(message)
  
     def process(self, instance):
-        """Extract render instance and output an mp4 representation."""
+        """Extract render instance and output an mp4 representation"""
         self.log.info(f"Extracting render: {instance.data['name']}")
         
         stub = animate.stub()
@@ -39,17 +39,36 @@ class ExtractRender(pyblish.api.InstancePlugin):
         
         file_basename = Path(doc_name).stem
         instance_name = instance.data["name"]
+        task_type = instance.data.get("task")
         output_basename = f"{file_basename}_{instance_name}"
         output_path = os.path.join(staging_dir, output_basename)
 
-        if not getattr(self, "swf_tasks", None):
-            raise RuntimeError("No SWF tasks specified in settings")
-        
-        self.render_source = getattr(self, "render_source", None)
-        if not self.render_source:
-            self.log.warning("No render source specified, defaulting to 'movie'")
-            render_source = "movie"
-        self.log.info(f"Render source mode: {render_source}")
+        ## hard-coded defaults, which should then be set below
+        is_swf_task = False
+        render_source = "movie"
+
+        ## attempt to integrate task_specific render profiles
+        render_profile = self._get_render_profile( task_type )
+        if render_profile:
+            is_swf_task = render_profile["export_swf"]
+            render_source = render_profile["render_source"]
+        else:
+            self.log.info( "Getting default publish settings" )
+            ## default settings
+            if not getattr(self, "swf_tasks", None):
+                self.log.warning("No SWF tasks specified in settings")
+                is_swf_task = False
+            else:
+                self.log.info( f"swf_tasks found: {self.swf_tasks}" )
+                is_swf_task = self._get_swf_settings( task_type, self.swf_tasks )
+            
+            ## check for default render source
+            render_source = getattr(self, "render_source", None)
+            if not render_source:
+                self.log.warning(f"No render source specified, defaulting to '{render_source}'")
+
+        self.log.info(f"Export SWF: {is_swf_task}" )
+        self.log.info(f"Render source mode: {render_source}" )
 
         if render_source == "png_sequence":
             self.log.info(f"Exporting PNG sequence to {staging_dir}")
@@ -68,14 +87,23 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.info(f"Exporting mov to {staging_dir}")
             movie = self.export_movie(output_path)
             video_output = self._adjust_mov_paths(movie, staging_dir, output_basename)
-            # mp4_output = self._convert_movie_to_mp4(
-            #     movie_output,
-            #     staging_dir,
-            #     output_basename,
-            # )
-            # self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
+
+            if render_source == "h264":
+                mp4_output = self._convert_movie_to_mp4(
+                    video_output,
+                    staging_dir,
+                    output_basename,
+                )
+                self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
+                ## placeholder, really lazy way to remove the mov to save space
+                self.clean_up_mov(
+                    video_output,
+                    staging_dir,
+                    output_basename,
+                )
         swf_output = None
-        if self.swf_tasks == instance.data.get("task"):
+
+        if is_swf_task:
             swf_output = self.export_swf(output_path)
             self.log.info(f"Exported SWF: {swf_output}")
 
@@ -83,16 +111,28 @@ class ExtractRender(pyblish.api.InstancePlugin):
         frame_end = instance.data.get("frameEnd", 1)
         
         # This is where we define the representations for the extracted media. Can change this to include the mp4 option instead or as well. 
-        representation = {
-            "name": "mov",
-            "ext": "mov",
-            "files": video_output,
-            "stagingDir": staging_dir,
-            "frameStart": frame_start,
-            "frameEnd": frame_end,
-            "fps": instance.data.get("fps", 25),
-            "tags": ["review"],
-        }
+        if render_source == "movie":
+            representation = {
+                "name": "mov",
+                "ext": "mov",
+                "files": video_output,
+                "stagingDir": staging_dir,
+                "frameStart": frame_start,
+                "frameEnd": frame_end,
+                "fps": instance.data.get("fps", 25),
+                "tags": ["review"],
+            }
+        else:
+            representation = {
+                "name": "mp4",
+                "ext": "mp4",
+                "files": mp4_output,
+                "stagingDir": staging_dir,
+                "frameStart": frame_start,
+                "frameEnd": frame_end,
+                "fps": instance.data.get("fps", 25),
+                "tags": ["review"],
+            }
         instance.data["representations"].append(representation)
 
         if swf_output:
@@ -112,6 +152,24 @@ class ExtractRender(pyblish.api.InstancePlugin):
         
         self.log.info(f"Extracted {instance.data['name']} to {staging_dir}")
 
+    def _get_render_profile(self,task_type):
+        if getattr(self,"task_render_profiles",None):
+            for render_profile in self.task_render_profiles:
+                self.log.info( "Checking render profile: " + str(render_profile) )
+                if task_type in [t.lower() for t in render_profile["task_types"]]:
+                    self.log.info( "Render profile found in " + str(render_profile["task_types"]) )
+                    return render_profile
+            self.log.info( f"Task type '{task_type}' does not match any render profiles" )
+        else:
+            self.log.info( "No render profiles defined in project settings")
+        return None
+
+    def _get_swf_settings(self,task_type,swf_tasks):
+        if task_type in [task.lower() for task in swf_tasks]:
+            self.log.info( f"Task type '{task_type}' will require a SWF export")
+            return True
+        return False
+
     def _export_png_sequence(self,output_path):
         export_path = str(output_path).replace("\\", "/")
         
@@ -121,7 +179,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
     def export_movie(self, output_path):
         export_path = str(output_path).replace("\\", "/")
-        return animate.stub().export_movie(export_path)
+        include_alpha = getattr(self,"include_alpha_in_mov",False)
+        return animate.stub().export_movie(export_path,include_alpha)
 
     def export_swf(self, output_path):
         export_path = str(output_path).replace("\\", "/")
@@ -133,8 +192,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
             extension="swf",
         )
         return os.path.basename(swf_path)
-
-
 
     def _collect_exported_frames(self, staging_dir, basename):
         import glob
@@ -150,7 +207,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         return [os.path.basename(f) for f in files]
     
     def _convert_sequence_to_mp4(self, staging_dir, basename):
-        """Convert exported PNG sequence to MP4 using ffmpeg."""
+        """Convert exported PNG sequence to MP4 using ffmpeg"""
         mp4_path = os.path.join(staging_dir, f"{basename}.mp4")
 
         png_pattern = os.path.join(staging_dir, f"{basename}%04d.png")
@@ -169,6 +226,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
         self._run_ffmpeg(args)
         return os.path.basename(mp4_path)
+        
     def _adjust_mov_paths(self, movie_output, staging_dir, basename):
         mov_path = os.path.join(staging_dir, f"{basename}.mov")
         if not os.path.exists(mov_path):
@@ -250,6 +308,24 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
         return export_path   
     
+    def clean_up_mov( self, movie_output, staging_dir, basename ):
+        movie_path = self._resolve_exported_media_path(
+            movie_output,
+            staging_dir=staging_dir,
+            basename=basename,
+            extension="mov",
+        )
+
+        if os.path.exists( movie_path ):
+            try:
+                os.remove( movie_path )
+                self.log.info( f"Removed QuickTime movie from staging path" )
+            except:
+                self.log.warning( f"Could not remove QuickTime movie at '{movie_path}'. Publish script will continue")
+        else:
+            self.log.warning( f"Could not find QuickTime movie at '{movie_path}'")
+
+
     def staging_dir(self, instance):
         from ayon_core.pipeline.publish import get_instance_staging_dir
         return get_instance_staging_dir(instance)

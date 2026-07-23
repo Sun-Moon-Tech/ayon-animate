@@ -398,14 +398,14 @@ class AnimateServerStub:
         )
         return result
         
-    def export_movie(self, path):
+    def export_movie(self, path, include_alpha ):
         """Export current document as quictime mov to path.
 
         Args:
             path (str): Path for exported movie.
         """
         result = self.websocketserver.call(
-            self.client.call("Animate.export_movie", path=path)
+            self.client.call("Animate.export_movie", path=path, include_alpha=include_alpha)
         )
         return result
     
