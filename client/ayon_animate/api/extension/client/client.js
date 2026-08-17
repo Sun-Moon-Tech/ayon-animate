@@ -2,8 +2,12 @@
     // do that)
     // consumes RPC calls from server (OpenPype) calls ./host/index.jsx and
     // returns values back (in json format)
+    
+    const os = require('os');
+    const home_dir = os.homedir()
+    var CEP_LOG_DIR = home_dir + '/.ayon/'
+    var CEP_LOG_FILE = CEP_LOG_DIR + 'ayon_animate_cep_client.log';
 
-    var CEP_LOG_FILE = 'C:/scripts/ayon_animate_cep_client.log';
 
     function stringifyLogPart(value) {
       if (typeof value === 'string') {
@@ -22,7 +26,7 @@
           return;
         }
 
-        window.cep.fs.makedir('C:/scripts');
+        window.cep.fs.makedir(CEP_LOG_DIR);
 
         var parts = [];
         for (var i = 0; i < args.length; i++) {
