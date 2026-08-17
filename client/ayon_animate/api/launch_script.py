@@ -7,12 +7,12 @@ workfile or others.
 
 import os
 import sys
+from pathlib import Path
 import logging
 import traceback
 
-LOG_DIR = r"C:\scripts"
+LOG_DIR = str(Path.home()) + ".ayon"
 LOG_PATH = os.path.join(LOG_DIR, "ayon_animate_python.log")
-
 
 class _TeeStream:
     def __init__(self, original, log_file):
