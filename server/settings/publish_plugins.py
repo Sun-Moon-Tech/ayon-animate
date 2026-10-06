@@ -43,10 +43,7 @@ class PictureInPictureSettings(BaseSettingsModel):
     pip_scale : float = SettingsField(
         1,
         title="PiP Scale",
-        description="Target scale for the PiP burnin.",
-        ge=0,
-        le=1,
-        decimal_places=2,
+        description="Target scale for the PiP burnin."
     )
 
     pip_offset : int = SettingsField(
