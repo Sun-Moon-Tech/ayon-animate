@@ -106,7 +106,7 @@ DEFAULT_PUBLISH_SETTINGS = {
         ],
         "picture_in_picture": {
             "target_product" : "reviewReference",
-            "pip_position" : "TopLeft",
+            "pip_position" : "top_left",
             "pip_scale" : 0.25,
             "pip_offset" : 10
         }

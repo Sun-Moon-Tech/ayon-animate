@@ -418,26 +418,26 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.info( "No PiP settings found in server. Setting to defaults.")
         else:
             # get scale
-            args["scale_ratio"] = str(1 / pip_settings.get("pip_scale"))
+            args["scale_ratio"] = str(1 / self.pip_settings.get("pip_scale"))
             # get position from offset
-            offset_px = pip_settings.get("pip_offset")
-            match pip_settings.get("pip_position"):
-                case "TopLeft":
+            offset_px = self.pip_settings.get("pip_offset")
+            match self.pip_settings.get("pip_position"):
+                case "top_left":
                     args["pos_x"] = str(offset_px)
                     args["pos_y"] = str(offset_px)
-                case "TopRight":
+                case "top_right":
                     args["pos_x"] = f"main_w-overlay_w-{offset_px}"
                     args["pos_y"] = str(offset_px)
-                case "BottomLeft":
+                case "bottom_left":
                     args["pos_x"] = str(offset_px)
                     args["pos_y"] = f"main_h-overlay_h-{offset_px}"
-                case "BottomRight":
+                case "bottom_right":
                     args["pos_x"] = f"main_w-overlay_w-{offset_px}"
                     args["pos_y"] = f"main_h-overlay_h-{offset_px}"
 
-        pip_settings = settings_template.format(**args)
-        self.log.debug(pip_settings)
-        return pip_settings
+        pip_args = settings_template.format(**args)
+        self.log.debug(pip_args)
+        return pip_args
 
     def _add_pip_to_render(self, source_mp4, staging_dir, basename):
         source_path = os.path.join(staging_dir, source_mp4)

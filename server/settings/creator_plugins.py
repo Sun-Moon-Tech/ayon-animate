@@ -9,11 +9,15 @@ class CreateRenderPluginModel(BaseSettingsModel):
     enabled: bool = SettingsField(True, title="Enabled")
     active_on_create: bool = SettingsField(True, title="Active by default")
     mark_for_review: bool = SettingsField(False, title="Review by default")
-    include_reference_pip: bool = SettingsField(False, title="Include reference PiP by default")
-    reference_pip_tasks: list[str] = SettingsField(
+    include_reference_pip: bool = SettingsField(
+        False,
+        title="Reference PiP by default",
+        description="Whether to enable reference picture-in-picture by default.",
+    )
+    tasks_to_include_pip: list[str] = SettingsField(
         default_factory=list,
-        title="Include reference PiP",
-        description="List of tasks that will include a PiP burnin by default. Can also be toggled in publisher settings.",
+        title="Tasks to include PiP",
+        description="List of tasks that will include a reference picture-in-picture burnin by default, if not enabled globally by <i>Reference PiP by default</i>.",
         enum_resolver=task_types_enum
     )
     default_variants: list[str] = SettingsField(
@@ -31,9 +35,9 @@ DEFAULT_CREATE_SETTINGS = {
     "RenderCreator": {
         "enabled": True,
         "active_on_create": True,
-        "mark_for_review": False,
+        "mark_for_review": True,
         "include_reference_pip" : False,
-        "reference_pip_tasks": [
+        "tasks_to_include_pip": [
             "Blocking"
         ],
         "default_variants": [
