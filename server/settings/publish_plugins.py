@@ -4,7 +4,12 @@ from ayon_server.settings import (
     task_types_enum
 )
 
-
+pip_position_enum = [
+    {"value": "top_left", "label": "Top Left"},
+    {"value": "top_right", "label": "Top Right"},
+    {"value": "btm_left", "label": "Bottom Left"},
+    {"value": "btm_right", "label": "Bottom Right"},
+]
 
 class RenderSourceProfile(BaseSettingsModel):
     _layout = "expanded"
@@ -18,6 +23,36 @@ class RenderSourceProfile(BaseSettingsModel):
         "",
         title="Render source",
         description="Render source for the given task type(s). Expects a value from: movie, h264, png_sequence"
+    )
+
+class PictureInPictureSettings(BaseSettingsModel):
+    """Settings for picture-in-picture (PiP) burnin when publishing Animate tasks."""
+    target_product: str = SettingsField(
+        "",
+        title="Target Product",
+        description="Target product to use for PiP burnin.",
+    )
+
+    pip_position : str = SettingsField(
+        default_factory=list,
+        title="PiP Position",
+        description="Position of the PiP burnin on the screen.",
+        enum_resolver=lambda: pip_position_enum,
+    )
+
+    pip_scale : float = SettingsField(
+        1,
+        title="PiP Scale",
+        description="Target scale for the PiP burnin.",
+        ge=0,
+        le=1,
+        decimal_places=2,
+    )
+
+    pip_offset : int = SettingsField(
+        1,
+        title="PiP Offset",
+        description="Value for how much the PiP burnin will be offset from the corner, in pixels."
     )
 
 class ExtractRenderSettings(BaseSettingsModel):
@@ -42,11 +77,15 @@ class ExtractRenderSettings(BaseSettingsModel):
         description="Controls whether to include the alpha channel when exporting QuickTime movies through the publisher. NOTE: it's recommended to have this turned off if not using the QuickTime files, as this will cause mp4 exports to appear with a black background."
     )
 
-
     task_render_profiles: list[RenderSourceProfile] = SettingsField(
         default_factory=list,
         title="Task profiles",
         description="Profiles for task-specific render settings."
+    )
+
+    picture_in_picture: PictureInPictureSettings = SettingsField(
+        default_factory=PictureInPictureSettings,
+        title="Picture-In-Picture (PiP) Settings"        
     ) 
 
 
@@ -67,6 +106,12 @@ DEFAULT_PUBLISH_SETTINGS = {
                 "export_swf":True,
                 "render_source":"h264"
             },
-        ]
+        ],
+        "picture_in_picture": {
+            "target_product" : "reviewReference",
+            "pip_position" : "TopLeft",
+            "pip_scale" : 0.25,
+            "pip_offset" : 10
+        }
     }
 }

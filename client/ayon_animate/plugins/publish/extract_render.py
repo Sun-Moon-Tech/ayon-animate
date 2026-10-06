@@ -5,9 +5,14 @@ from ayon_core.lib.vendor_bin_utils import get_ffmpeg_tool_args
 
 
 import pyblish.api
-from ayon_core.pipeline import publish
+import ayon_api
+from ayon_core.pipeline import (
+    publish,
+    Anatomy
+)
+from ayon_core.pipeline.template_data import get_template_data
+from ayon_core.lib import path_tools
 from ayon_animate import api as animate
-
 
 class ExtractRender(pyblish.api.InstancePlugin):
     """Export render instances.
@@ -23,12 +28,21 @@ class ExtractRender(pyblish.api.InstancePlugin):
     families = ["render"]
     settings_category = "animate"
 
+    creator_attributes = None
+
+    pip_product = "reviewReference"
+    pip_file_path = None
+    pip_settings = None
+
     def host_trace(self, message):
         return animate.stub().host_trace(message)
  
     def process(self, instance):
         """Extract render instance and output an mp4 representation"""
         self.log.info(f"Extracting render: {instance.data['name']}")
+
+        self.creator_attributes = instance.data.get("creator_attributes")
+        self.log.debug(self.creator_attributes)
         
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
@@ -42,6 +56,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
         task_type = instance.data.get("task")
         output_basename = f"{file_basename}_{instance_name}"
         output_path = os.path.join(staging_dir, output_basename)
+
+        ## attempt to get picture-in-picture working
+        if self.creator_attributes["include_reference_pip"]:
+            self.pip_settings = getattr(self,"picture_in_picture",None)
+            self.pip_file_path = self._get_pip_entity(instance)
+            self.log.info(f"PiP entity found: {self.pip_file_path}")
 
         ## hard-coded defaults, which should then be set below
         is_swf_task = False
@@ -95,6 +115,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
                     output_basename,
                 )
                 self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
+                if self.pip_file_path:
+                    mp4_output = self._add_pip_to_render(
+                        mp4_output,
+                        staging_dir,
+                        output_basename
+                    )
                 ## placeholder, really lazy way to remove the mov to save space
                 self.clean_up_mov(
                     video_output,
@@ -102,6 +128,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
                     output_basename,
                 )
         swf_output = None
+
 
         if is_swf_task:
             swf_output = self.export_swf(output_path)
@@ -242,6 +269,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         )
 
         mp4_path = os.path.join(staging_dir, f"{basename}.mp4")
+
         args = [
             "-y",
             "-i",
@@ -325,6 +353,111 @@ class ExtractRender(pyblish.api.InstancePlugin):
         else:
             self.log.warning( f"Could not find QuickTime movie at '{movie_path}'")
 
+    def _get_pip_entity(self, instance):
+        pip_product = getattr(self.pip_settings,"target_product", self.pip_product)
+        ## Picture in picture
+        project_name = instance.data["projectEntity"]["name"]
+        folder_data = instance.data["folderEntity"]
+        # check it exists and get latest version
+        pip_entity = ayon_api.get_last_version_by_product_name(
+            project_name,
+            pip_product,
+            folder_data["id"],
+            fields=["name","version"]
+        )
+        if not pip_entity: # no versions found
+            return None
+        # get anatomy path for pip entity
+        anatomy = Anatomy(
+            instance.data["projectEntity"]["name"],
+            project_entity=instance.data["projectEntity"]
+        )
+        anatomy_data = get_template_data(
+            instance.data["projectEntity"],
+            instance.data["folderEntity"],
+            instance.data["taskEntity"]
+        )
+        anatomy_data["product"] = {
+            "type" : "review",
+            "name" : pip_product,
+        }
+        anatomy_data["version"] = pip_entity["version"]
+        pip_dir_path = anatomy.get_template_item(
+            "publish", "shot_render", "directory"
+        ).format(anatomy_data)
+        # get file
+        pip_file_version = "v{0:0>3}".format(pip_entity["version"])
+        pip_file_target = "_".join([
+            pip_product,
+            pip_file_version,
+            "h264.mp4"
+        ])
+        pip_file_name = None
+        for file in os.listdir(pip_dir_path):
+            if pip_file_target in file:
+                pip_file_name = file
+                break
+        if not pip_file_name:
+            return None
+        ## join filename
+        pip_file_path = os.path.join(pip_dir_path, pip_file_name)
+        return pip_file_path
+
+
+    def _get_pip_settings(self):
+        # prepare arguments
+        settings_template = "[1]scale=iw/{scale_ratio}:ih/{scale_ratio} [pip]; [0][pip] overlay={pos_x}:{pos_y}"
+        args = {
+            "scale_ratio" : "4",
+            "pos_x" : "10",
+            "pos_y" : "10",
+        }
+
+        # get settings from server
+        if not self.pip_settings:
+            self.log.info( "No PiP settings found in server. Setting to defaults.")
+        else:
+            # get scale
+            args["scale_ratio"] = str(1 / pip_settings.get("pip_scale"))
+            # get position from offset
+            offset_px = pip_settings.get("pip_offset")
+            match pip_settings.get("pip_position"):
+                case "TopLeft":
+                    args["pos_x"] = str(offset_px)
+                    args["pos_y"] = str(offset_px)
+                case "TopRight":
+                    args["pos_x"] = f"main_w-overlay_w-{offset_px}"
+                    args["pos_y"] = str(offset_px)
+                case "BottomLeft":
+                    args["pos_x"] = str(offset_px)
+                    args["pos_y"] = f"main_h-overlay_h-{offset_px}"
+                case "BottomRight":
+                    args["pos_x"] = f"main_w-overlay_w-{offset_px}"
+                    args["pos_y"] = f"main_h-overlay_h-{offset_px}"
+
+        pip_settings = settings_template.format(**args)
+        self.log.debug(pip_settings)
+        return pip_settings
+
+    def _add_pip_to_render(self, source_mp4, staging_dir, basename):
+        source_path = os.path.join(staging_dir, source_mp4)
+        mp4_path = os.path.join(staging_dir, f"{basename}_pip.mp4")
+
+        pip_settings = self._get_pip_settings()
+
+        args = [
+            "-y",
+            "-i",
+            source_path,
+            "-i",
+            self.pip_file_path,
+            "-filter_complex",
+            pip_settings,
+            mp4_path,
+        ]
+
+        self._run_ffmpeg(args)
+        return os.path.basename(mp4_path)
 
     def staging_dir(self, instance):
         from ayon_core.pipeline.publish import get_instance_staging_dir
