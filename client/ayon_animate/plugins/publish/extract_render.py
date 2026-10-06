@@ -1,5 +1,5 @@
 import subprocess
-import os
+import os, json
 from pathlib import Path
 from ayon_core.lib.vendor_bin_utils import get_ffmpeg_tool_args
 
@@ -29,9 +29,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
     settings_category = "animate"
 
     creator_attributes = None
-
-    pip_product = "reviewReference"
-    pip_file_path = None
+    render_source = "mp4"
     pip_settings = None
 
     def host_trace(self, message):
@@ -42,8 +40,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.log.info(f"Extracting render: {instance.data['name']}")
 
         self.creator_attributes = instance.data.get("creator_attributes")
-        self.log.debug(self.creator_attributes)
-        
+        if "renderSource" in instance.data:
+            self.render_source = instance.data.get("renderSource")
+
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
         
@@ -58,20 +57,23 @@ class ExtractRender(pyblish.api.InstancePlugin):
         output_path = os.path.join(staging_dir, output_basename)
 
         ## attempt to get picture-in-picture working
-        if self.creator_attributes["include_reference_pip"]:
-            self.pip_settings = getattr(self,"picture_in_picture",None)
-            self.pip_file_path = self._get_pip_entity(instance)
-            self.log.info(f"PiP entity found: {self.pip_file_path}")
+        if "include_reference_pip" in self.creator_attributes:
+            if self.creator_attributes["include_reference_pip"]:
+                self.pip_settings = getattr(self,"picture_in_picture",None)
+                pip_file_path = self._get_pip_entity(instance)
+                if not pip_file_path:
+                    self.log.warning(f"A reference picture-in-picture was requested, but no suitable file was found.")
+                else:
+                    self.log.info(f"PiP entity found: {pip_file_path}")
 
         ## hard-coded defaults, which should then be set below
         is_swf_task = False
-        render_source = "movie"
-
+        
         ## attempt to integrate task_specific render profiles
         render_profile = self._get_render_profile( task_type )
         if render_profile:
             is_swf_task = render_profile["export_swf"]
-            render_source = render_profile["render_source"]
+            #render_source = render_profile["render_source"]
         else:
             self.log.info( "Getting default publish settings" )
             ## default settings
@@ -82,15 +84,19 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 self.log.info( f"swf_tasks found: {self.swf_tasks}" )
                 is_swf_task = self._get_swf_settings( task_type, self.swf_tasks )
             
-            ## check for default render source
-            render_source = getattr(self, "render_source", None)
-            if not render_source:
-                self.log.warning(f"No render source specified, defaulting to '{render_source}'")
+        ## check for default render source
+        # self.render_source = getattr(self, "self.render_source", None)
+        # if not self.render_source:
+        #     self.log.warning(f"No render source specified, defaulting to '{self.render_source}'")
 
         self.log.info(f"Export SWF: {is_swf_task}" )
-        self.log.info(f"Render source mode: {render_source}" )
+        self.log.info(f"Render source mode: {self.render_source}" )
 
-        if render_source == "png_sequence":
+        # fixing legacy settings
+        if self.render_source == "h264":
+            self.render_source == "mp4"
+
+        if self.render_source == "png":
             self.log.info(f"Exporting PNG sequence to {staging_dir}")
             self._export_png_sequence(output_path)
 
@@ -108,16 +114,17 @@ class ExtractRender(pyblish.api.InstancePlugin):
             movie = self.export_movie(output_path)
             video_output = self._adjust_mov_paths(movie, staging_dir, output_basename)
 
-            if render_source == "h264":
+            if self.render_source == "mp4":
                 mp4_output = self._convert_movie_to_mp4(
                     video_output,
                     staging_dir,
                     output_basename,
                 )
                 self.log.info(f"Converted QuickTime movie to MP4: {mp4_output}")
-                if self.pip_file_path:
+                if pip_file_path:
                     mp4_output = self._add_pip_to_render(
                         mp4_output,
+                        pip_file_path,
                         staging_dir,
                         output_basename
                     )
@@ -129,7 +136,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 )
         swf_output = None
 
-
         if is_swf_task:
             swf_output = self.export_swf(output_path)
             self.log.info(f"Exported SWF: {swf_output}")
@@ -138,7 +144,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         frame_end = instance.data.get("frameEnd", 1)
         
         # This is where we define the representations for the extracted media. Can change this to include the mp4 option instead or as well. 
-        if render_source == "movie":
+        if self.render_source == "mov":
             representation = {
                 "name": "mov",
                 "ext": "mov",
@@ -237,20 +243,30 @@ class ExtractRender(pyblish.api.InstancePlugin):
         """Convert exported PNG sequence to MP4 using ffmpeg"""
         mp4_path = os.path.join(staging_dir, f"{basename}.mp4")
 
+        start_frame = self.creator_attributes["start_frame"]
+        frame_length = self.creator_attributes["end_frame"]-start_frame
+        bg_colour = getattr(self,"png_bg_colour","#666666")
+
         png_pattern = os.path.join(staging_dir, f"{basename}%04d.png")
         args = [
             "-y",
             "-framerate",
             "25",
+            "-start_number",
+            str(start_frame),
             "-i",
             png_pattern,
+            "-frames:v",
+            str(frame_length),
+            "-filter_complex",
+            f"color='{bg_colour}',format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1",
             "-c:v",
             "libx264",
             "-pix_fmt",
             "yuv420p",
             mp4_path,
         ]
-
+        self.log.debug(args)
         self._run_ffmpeg(args)
         return os.path.basename(mp4_path)
         
@@ -354,14 +370,17 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.warning( f"Could not find QuickTime movie at '{movie_path}'")
 
     def _get_pip_entity(self, instance):
-        pip_product = getattr(self.pip_settings,"target_product", self.pip_product)
-        ## Picture in picture
+        if not "target_product" in self.pip_settings:
+            self.log.info("No target_product defined in PiP settings.")
+            return None
+        target_product = self.pip_settings["target_product"]
+        # Picture in picture
         project_name = instance.data["projectEntity"]["name"]
         folder_data = instance.data["folderEntity"]
         # check it exists and get latest version
         pip_entity = ayon_api.get_last_version_by_product_name(
             project_name,
-            pip_product,
+            target_product,
             folder_data["id"],
             fields=["name","version"]
         )
@@ -379,7 +398,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         )
         anatomy_data["product"] = {
             "type" : "review",
-            "name" : pip_product,
+            "name" : target_product,
         }
         anatomy_data["version"] = pip_entity["version"]
         pip_dir_path = anatomy.get_template_item(
@@ -388,7 +407,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         # get file
         pip_file_version = "v{0:0>3}".format(pip_entity["version"])
         pip_file_target = "_".join([
-            pip_product,
+            target_product,
             pip_file_version,
             "h264.mp4"
         ])
@@ -404,7 +423,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         return pip_file_path
 
 
-    def _get_pip_settings(self):
+    def _get_pip_ffmpeg_args(self):
         # prepare arguments
         settings_template = "[1]scale=iw/{scale_ratio}:ih/{scale_ratio} [pip]; [0][pip] overlay={pos_x}:{pos_y}"
         args = {
@@ -439,20 +458,20 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.log.debug(pip_args)
         return pip_args
 
-    def _add_pip_to_render(self, source_mp4, staging_dir, basename):
+    def _add_pip_to_render(self, source_mp4, pip_file_path, staging_dir, basename):
         source_path = os.path.join(staging_dir, source_mp4)
         mp4_path = os.path.join(staging_dir, f"{basename}_pip.mp4")
 
-        pip_settings = self._get_pip_settings()
+        pip_args = self._get_pip_ffmpeg_args()
 
         args = [
             "-y",
             "-i",
             source_path,
             "-i",
-            self.pip_file_path,
+            pip_file_path,
             "-filter_complex",
-            pip_settings,
+            pip_args,
             mp4_path,
         ]
 
