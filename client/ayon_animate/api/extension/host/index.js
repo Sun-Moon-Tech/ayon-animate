@@ -1,12 +1,12 @@
 host_trace = function(message) {
     // Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
 
-    // try {
-    //     fl.trace("host_trace: " + message);
-    // } catch (_) {
-    //     // Never throw from logger path.
-    //     debugAlert("host_trace: failed trace" );
-    // }
+    try {
+        fl.trace("host_trace: " + message);
+    } catch (_) {
+        // Never throw from logger path.
+        debugAlert("host_trace: failed trace" );
+    }
     return
 }
 
@@ -750,6 +750,21 @@ exportPngSequence = function(path) {
         host_trace("export failed: " + e);
     }
 
+}
+
+getTImelineLength = function() {
+    var frame_count = 0;
+    try {
+        var doc = fl.getDocumentDOM();
+        var timeline = doc.getTimeline();
+        if (timeline && timeline.frameCount) {
+            frame_count = Number(timeline.frameCount);
+        }
+    }
+    catch (e) {
+        host_trace("could not get frame count: " + e);
+    }
+    return frame_count;
 }
 
 

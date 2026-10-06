@@ -409,6 +409,9 @@
         return runEvalScript("exportSwf(" + encodedPath + ")")
       })
 
+      RPC.addRoute('Animate.get_timeline_length'), function (data) {
+        return runEvalScript("getTimelineLength()")
+      }
 
       RPC.addRoute('Animate.get_active_document_full_name', function (data) {
             //   log.warn('Server called client route ' +

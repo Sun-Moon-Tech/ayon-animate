@@ -542,6 +542,14 @@ class AnimateServerStub:
             )
         )
 
+    def get_timeline_length(self):
+        """Attempt to get length of timeline."""
+        self.websocketserver.call(
+            self.client.call(
+                'Animate.get_timeline_length'
+            )
+        )
+
     def revert_to_previous(self):
         """Reverts active document to last saved state"""
         self.websocketserver.call(
