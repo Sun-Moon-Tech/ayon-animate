@@ -752,13 +752,14 @@ exportPngSequence = function(path) {
 
 }
 
-getTImelineLength = function() {
+getTimelineLength = function() {
     var frame_count = 0;
     try {
         var doc = fl.getDocumentDOM();
         var timeline = doc.getTimeline();
         if (timeline && timeline.frameCount) {
-            frame_count = Number(timeline.frameCount);
+            frame_count = timeline.frameCount;
+            host_trace("got frame count of " + String(frame_count) + " frames")
         }
     }
     catch (e) {

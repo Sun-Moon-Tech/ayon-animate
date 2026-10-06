@@ -90,7 +90,14 @@ class AnimateServerStub:
                 return False
         return bool(result)
     
-        
+    def get_timeline_length(self):
+        result = self.websocketserver.call(
+            self.client.call('Animate.get_timeline_length')
+        )
+        if self._is_evalscript_error(result):
+            return False
+        return int(result)
+
     def open(self, path):
         """Open file located at 'path' (local).
 
@@ -541,15 +548,6 @@ class AnimateServerStub:
                 id=id
             )
         )
-
-    def get_timeline_length(self):
-        """Attempt to get length of timeline."""
-        self.websocketserver.call(
-            self.client.call(
-                'Animate.get_timeline_length'
-            )
-        )
-
     def revert_to_previous(self):
         """Reverts active document to last saved state"""
         self.websocketserver.call(
