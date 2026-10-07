@@ -1,12 +1,12 @@
 host_trace = function(message) {
     // Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
 
-    try {
-        fl.trace("host_trace: " + message);
-    } catch (_) {
-        // Never throw from logger path.
-        debugAlert("host_trace: failed trace" );
-    }
+    // try {
+    //     fl.trace("host_trace: " + message);
+    // } catch (_) {
+    //     // Never throw from logger path.
+    //     debugAlert("host_trace: failed trace" );
+    // }
     return
 }
 
@@ -693,7 +693,7 @@ replacePublishPngProperties = function(profileXml, opts) {
     return newProfile;
 }
 exportSwf = function(path) {
-    fl.trace( "exporting to file:///" + path + ".swf" );
+    host_trace( "exporting to file:///" + path + ".swf" );
     var doc = fl.getDocumentDOM();
     
     if (doc) {
