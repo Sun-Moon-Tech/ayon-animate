@@ -71,7 +71,7 @@ class ExtractRenderSettings(BaseSettingsModel):
 
     include_alpha_in_mov : bool = SettingsField(
         False,
-        title="Export QuickTime with alpha channel",
+        title="QuickTime alpha",
         description="Controls whether to include the alpha channel when exporting QuickTime movies through the publisher. NOTE: it's recommended to have this turned off if not using the QuickTime files, as this will cause mp4 exports to appear with a black background."
     )
 
@@ -104,13 +104,13 @@ DEFAULT_PUBLISH_SETTINGS = {
         "swf_tasks": ["Animation"],
         # "render_source" : "h264",
         "include_alpha_in_mov" : False,
-        "png_bg_colour" : "#666666"
-        "task_render_profiles" : [
+        "png_bg_colour" : "#666666",
+        "task_render_profiles": [
             {
-                "task_types":["Animation"],
-                "export_swf":True,
+                "task_types": ["Animation"],
+                "export_swf": True
                 # "render_source":"h264"
-            },
+            }
         ],
         "picture_in_picture": {
             "target_product" : "reviewReference",

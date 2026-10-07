@@ -24,7 +24,7 @@ class PNGSequenceCreator(Creator):
     label = "PNG sequence"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Creates a PNG sequence of the timeline."
+    description = "Creates a PNG sequence of the timeline, and uploads the PNGs and rendered video."
     settings_category = "animate"
 
     # Settings

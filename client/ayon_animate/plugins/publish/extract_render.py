@@ -45,13 +45,16 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.log.info(f"Extracting render: {instance.data['name']}")
 
         self.creator_attributes = instance.data.get("creator_attributes")
+        self.log.debug(self.creator_attributes)
         if "renderSource" in instance.data:
             self.render_source = instance.data.get("renderSource")
 
         self.frame_start = instance.data.get("frameStart", 0) if not ("start_frame" in self.creator_attributes) else self.creator_attributes["start_frame"]
         self.frame_end = instance.data.get("frameEnd", 1) if not ("end_frame" in self.creator_attributes) else self.creator_attributes["end_frame"]
         self.fps =  instance.data.get("fps", 25)
-        timeline_end = instance.data.get("timelineLength",self.frame_end)
+        self.timeline_end = instance.data.get("timelineLength",self.frame_end)
+        self.log.info( f"Start frame: {self.frame_start}; End frame: {self.frame_end}; FPS: {self.fps}")
+
 
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
@@ -118,7 +121,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
                     f"No PNG frames exported to {staging_dir}"
                 )
             self.log.info(f"Exported {len(frame_files)} frames")
-            frame_output = frame_files[self.frame_start:self.frame_end]
+
+            first_frame = max(0,self.frame_start-1)
+            frame_output = frame_files[first_frame:self.frame_end]
             mp4_output = self._convert_sequence_to_mp4(staging_dir,output_basename)
             self.log.info(f"Converted PNG sequence to MP4: {mp4_output}")
         else:
@@ -266,7 +271,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         """Convert exported PNG sequence to MP4 using ffmpeg"""
         mp4_path = os.path.join(staging_dir, f"{basename}.mp4")
 
-        frame_length = self.frame_end-self.frame_start
+        frame_length = (self.frame_end-self.frame_start)+1
         bg_colour = getattr(self,"png_bg_colour","#666666")
 
         png_pattern = os.path.join(staging_dir, f"{basename}%04d.png")
@@ -275,7 +280,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "-framerate",
             "25",
             "-start_number",
-            str(self.start_frame),
+            str(self.frame_start),
             "-i",
             png_pattern,
             "-frames:v",
