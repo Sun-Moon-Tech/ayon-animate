@@ -293,7 +293,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "yuv420p",
             mp4_path,
         ]
-        self.log.debug(args)
         self._run_ffmpeg(args)
         return os.path.basename(mp4_path)
         
@@ -463,6 +462,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         if not self.pip_settings:
             self.log.info( "No PiP settings found in server. Setting to defaults.")
         else:
+            self.log.debug(self.pip_settings)
             # get scale
             args["scale_ratio"] = str(1 / self.pip_settings.get("pip_scale"))
             # get position from offset
@@ -474,10 +474,10 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 case "top_right":
                     args["pos_x"] = f"main_w-overlay_w-{offset_px}"
                     args["pos_y"] = str(offset_px)
-                case "bottom_left":
+                case "btm_left":
                     args["pos_x"] = str(offset_px)
                     args["pos_y"] = f"main_h-overlay_h-{offset_px}"
-                case "bottom_right":
+                case "btm_right":
                     args["pos_x"] = f"main_w-overlay_w-{offset_px}"
                     args["pos_y"] = f"main_h-overlay_h-{offset_px}"
 
