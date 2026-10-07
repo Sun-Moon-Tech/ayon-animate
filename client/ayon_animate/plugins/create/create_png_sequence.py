@@ -47,7 +47,8 @@ class PNGSequenceCreator(Creator):
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
             "productName": product_name,
-            "renderSource" : "png"
+            "renderSource" : "png",
+            "timelineLength" : self.timeline_length
         }
         data.update(data_update)
         
@@ -82,9 +83,6 @@ class PNGSequenceCreator(Creator):
         self._add_instance_to_context(new_instance)
         self.host_trace("Instance imprinted and added to context")
 
-    def get_timeline_length(self):
-        return api.stub().get_timeline_length()
-
     def host_trace(self, message):
         return api.stub().host_trace(message)
  
@@ -116,7 +114,7 @@ class PNGSequenceCreator(Creator):
             self._remove_instance_from_context(instance)
 
     def get_pre_create_attr_defs(self):
-        self.timeline_length = self.get_timeline_length()
+        self.timeline_length = api.stub().get_timeline_length()
         output = [
             BoolDef(
                 "mark_for_review",
