@@ -32,10 +32,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
     render_source = "mp4"
     pip_settings = None
 
-    frame_start = 0
-    frame_end = 0
+    frame_start = 1
+    frame_end = 1
     fps = 0
-    timeline_end = 0
 
     def host_trace(self, message):
         return animate.stub().host_trace(message)
@@ -52,7 +51,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.frame_start = instance.data.get("frameStart", 0) if not ("start_frame" in self.creator_attributes) else self.creator_attributes["start_frame"]
         self.frame_end = instance.data.get("frameEnd", 1) if not ("end_frame" in self.creator_attributes) else self.creator_attributes["end_frame"]
         self.fps =  instance.data.get("fps", 25)
-        self.timeline_end = instance.data.get("timelineLength",self.frame_end)
         self.log.info( f"Start frame: {self.frame_start}; End frame: {self.frame_end}; FPS: {self.fps}")
 
 

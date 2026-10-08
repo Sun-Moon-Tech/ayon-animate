@@ -48,7 +48,6 @@ class PNGSequenceCreator(Creator):
         data_update = {
             "productName": product_name,
             "renderSource" : "png",
-            "timelineLength" : self.timeline_length
         }
         data.update(data_update)
         
@@ -124,15 +123,15 @@ class PNGSequenceCreator(Creator):
             NumberDef(
                 "start_frame",
                 label="Start frame",
-                minimum=0,
+                minimum=1,
                 maximum=self.timeline_length,
                 decimals=0,
-                default=0,
+                default=1,
             ),
             NumberDef(
                 "end_frame",
                 label="End frame",
-                minimum=0,
+                minimum=1,
                 maximum=self.timeline_length,
                 decimals=0,
                 default=self.timeline_length,
