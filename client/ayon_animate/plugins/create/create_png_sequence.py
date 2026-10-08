@@ -1,6 +1,6 @@
 import re
 
-from ayon_core.lib import BoolDef, EnumDef
+from ayon_core.lib import BoolDef, NumberDef
 from ayon_core.pipeline import (
     Creator,
     CreatedInstance,
@@ -17,26 +17,22 @@ import os
 # Likely workflow will be: export image seq and swf from Animate. Swf will be autocreated as one instance, png seq will be used as an inbetween step via ffmpeg
 # in order to publish either mp4s or pngs depending on the created instance. Animate doesn't have a way to export mp4s directly, so ffmpeg is the only option. 
 
-class RenderCreator(Creator):
-    """Creates image instance for publishing.
-
-    Result of 'image' instance is image of all visible layers, or image(s) of
-    selected layers.
+class PNGSequenceCreator(Creator):
+    """Renders the current scene as a PNG sequence.
     """
-    identifier = "render"
-    label = "Render"
+    identifier = "png_sequence"
+    label = "PNG sequence"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Render creator"
+    description = "Creates a PNG sequence of the timeline, and uploads the PNGs and rendered video."
     settings_category = "animate"
 
     # Settings
     default_variants = ""
     mark_for_review = True
     active_on_create = True
-    reference_pip_on_create = False
-    tasks_to_include_pip = ["Blocking"]
-    
+    timeline_length = 0
+
     def create(self, product_name_from_ui, data, pre_create_data):
         stub = api.stub()  # only after Animate is up
         self.host_trace("Creating render instance")
@@ -51,26 +47,26 @@ class RenderCreator(Creator):
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
             "productName": product_name,
-            "renderSource" : "mp4"
-
+            "renderSource" : "png",
+            "timelineLength" : self.timeline_length
         }
         data.update(data_update)
         
         mark_for_review = (pre_create_data.get("mark_for_review") or
                             self.mark_for_review)
         self.host_trace(f"Mark for review: {mark_for_review}")
-        include_reference_pip = (self._check_for_pip(data) or
-                                    self.reference_pip_on_create)
-        self.host_trace(f"Include reference PiP: {include_reference_pip}")
+        start_frame = (pre_create_data.get("start_frame") or 0)
+        end_frame = (pre_create_data.get("end_frame") or self.get_timeline_length())
+        self.host_trace(f"Will export from frame {start_frame} to {end_frame}")
         creator_attributes = {
             "mark_for_review": mark_for_review,
-            "include_reference_pip": include_reference_pip,
+            "start_frame": start_frame,
+            "end_frame": end_frame
             }
         data.update({"creator_attributes": creator_attributes})
 
         if not self.active_on_create:
             data["active"] = False
-
 
         new_instance = CreatedInstance(
             product_base_type=self.product_base_type,
@@ -86,7 +82,6 @@ class RenderCreator(Creator):
                         new_instance.data_to_store())
         self._add_instance_to_context(new_instance)
         self.host_trace("Instance imprinted and added to context")
-
 
     def host_trace(self, message):
         return api.stub().host_trace(message)
@@ -119,12 +114,29 @@ class RenderCreator(Creator):
             self._remove_instance_from_context(instance)
 
     def get_pre_create_attr_defs(self):
+        self.timeline_length = api.stub().get_timeline_length()
         output = [
             BoolDef(
                 "mark_for_review",
                 label="Create separate review",
                 default=False
             ),
+            NumberDef(
+                "start_frame",
+                label="Start frame",
+                minimum=0,
+                maximum=self.timeline_length,
+                decimals=0,
+                default=0,
+            ),
+            NumberDef(
+                "end_frame",
+                label="End frame",
+                minimum=0,
+                maximum=self.timeline_length,
+                decimals=0,
+                default=self.timeline_length,
+            )
         ]
         return output
 
@@ -134,18 +146,23 @@ class RenderCreator(Creator):
                 "mark_for_review",
                 label="Mark for review"
             ),
-            BoolDef(
-                "include_reference_pip",
-                label="Include reference PiP"
+            NumberDef(
+                "start_frame",
+                label="Start frame",
+                minimum=0,
+                maximum=self.timeline_length,
+                decimals=0,
+                default=0,
+            ),
+            NumberDef(
+                "end_frame",
+                label="End frame",
+                minimum=0,
+                maximum=self.timeline_length,
+                decimals=0,
+                default=self.timeline_length,
             )
         ]
-
-    def _check_for_pip(self,data):
-        if not "task" in data:
-            return self.reference_pip_on_create
-        task_type = data["task"]
-        target_tasks = [t.lower() for t in self.tasks_to_include_pip]
-        return task_type.lower() in target_tasks
 
     def get_detail_description(self):
         return """Creator for Render instances
