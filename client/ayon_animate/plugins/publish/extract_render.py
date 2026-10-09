@@ -53,6 +53,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.fps =  instance.data.get("fps", 25)
         self.log.info( f"Start frame: {self.frame_start}; End frame: {self.frame_end}; FPS: {self.fps}")
 
+        if not "include_pngs" in self.creator_attributes:
+            self.creator_attributes["include_pngs"] = False
 
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
@@ -182,17 +184,17 @@ class ExtractRender(pyblish.api.InstancePlugin):
             }
         instance.data["representations"].append(representation)
 
-        if self.render_source == "png":
-            png_representation = {
-                "name": "png",
-                "ext": "png",
-                "files": frame_output,
-                "stagingDir": staging_dir,
-                "frameStart": self.frame_start,
-                "frameEnd": self.frame_end,
-                "tags": [],
-            }
-            instance.data["representations"].append(png_representation)
+        if self.render_source == "png" and self.creator_attributes["include_pngs"]:
+                png_representation = {
+                    "name": "png",
+                    "ext": "png",
+                    "files": frame_output,
+                    "stagingDir": staging_dir,
+                    "frameStart": self.frame_start,
+                    "frameEnd": self.frame_end,
+                    "tags": [],
+                }
+                instance.data["representations"].append(png_representation)
 
         if swf_output:
             swf_representation = {

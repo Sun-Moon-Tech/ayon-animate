@@ -57,8 +57,11 @@ class PNGSequenceCreator(Creator):
         start_frame = (pre_create_data.get("start_frame") or 0)
         end_frame = (pre_create_data.get("end_frame") or self.get_timeline_length())
         self.host_trace(f"Will export from frame {start_frame} to {end_frame}")
+        include_pngs = (pre_create_data.get("include_pngs") or False)
+        self.host_trace(f"Include PNGs in publish: {include_pngs}")
         creator_attributes = {
             "mark_for_review": mark_for_review,
+            "include_pngs" : include_pngs,
             "start_frame": start_frame,
             "end_frame": end_frame
             }
@@ -120,6 +123,11 @@ class PNGSequenceCreator(Creator):
                 label="Create separate review",
                 default=False
             ),
+            BoolDef(
+                "include_pngs",
+                label="Include PNGs in publish",
+                default=False
+            ),
             NumberDef(
                 "start_frame",
                 label="Start frame",
@@ -144,6 +152,11 @@ class PNGSequenceCreator(Creator):
             BoolDef(
                 "mark_for_review",
                 label="Mark for review"
+            ),
+            BoolDef(
+                "include_pngs",
+                label="Include PNGs in publish",
+                default=False
             ),
             NumberDef(
                 "start_frame",
