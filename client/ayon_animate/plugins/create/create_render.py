@@ -36,7 +36,7 @@ class RenderCreator(Creator):
     active_on_create = True
     reference_pip_on_create = False
     tasks_to_include_pip = ["Blocking"]
-    
+
     def create(self, product_name_from_ui, data, pre_create_data):
         stub = api.stub()  # only after Animate is up
         self.host_trace("Creating render instance")
@@ -52,16 +52,19 @@ class RenderCreator(Creator):
         data_update = {
             "productName": product_name,
             "renderSource" : "mp4"
-
         }
         data.update(data_update)
         
         mark_for_review = (pre_create_data.get("mark_for_review") or
                             self.mark_for_review)
         self.host_trace(f"Mark for review: {mark_for_review}")
-        include_reference_pip = (self._check_for_pip(data) or
-                                    self.reference_pip_on_create)
+
+        if pre_create_data.get("reference_pip_selection") == "default":
+            include_reference_pip = (self._check_for_pip(data) or self.reference_pip_on_create)
+        else:
+            include_reference_pip = pre_create_data.get("reference_pip_selection")
         self.host_trace(f"Include reference PiP: {include_reference_pip}")
+    
         creator_attributes = {
             "mark_for_review": mark_for_review,
             "include_reference_pip": include_reference_pip,
@@ -70,7 +73,6 @@ class RenderCreator(Creator):
 
         if not self.active_on_create:
             data["active"] = False
-
 
         new_instance = CreatedInstance(
             product_base_type=self.product_base_type,
@@ -125,6 +127,15 @@ class RenderCreator(Creator):
                 label="Create separate review",
                 default=False
             ),
+            EnumDef(
+                "reference_pip_selection",
+                items=[
+                    {"value": "default", "label": "<default for task>"},
+                    {"value": True, "label": "Include reference"},
+                    {"value": False, "label": "Exclude reference"}
+                ],
+                label="Include reference PiP",
+            )
         ]
         return output
 

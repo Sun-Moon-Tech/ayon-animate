@@ -32,10 +32,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
     render_source = "mp4"
     pip_settings = None
 
-    frame_start = 0
-    frame_end = 0
+    frame_start = 1
+    frame_end = 1
     fps = 0
-    timeline_end = 0
 
     def host_trace(self, message):
         return animate.stub().host_trace(message)
@@ -52,7 +51,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
         self.frame_start = instance.data.get("frameStart", 0) if not ("start_frame" in self.creator_attributes) else self.creator_attributes["start_frame"]
         self.frame_end = instance.data.get("frameEnd", 1) if not ("end_frame" in self.creator_attributes) else self.creator_attributes["end_frame"]
         self.fps =  instance.data.get("fps", 25)
-        self.timeline_end = instance.data.get("timelineLength",self.frame_end)
         self.log.info( f"Start frame: {self.frame_start}; End frame: {self.frame_end}; FPS: {self.fps}")
 
 
@@ -396,10 +394,17 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.warning( f"Could not find QuickTime movie at '{movie_path}'")
 
     def _get_pip_entity(self, instance):
-        if not "target_product" in self.pip_settings:
-            self.log.info("No target_product defined in PiP settings.")
-            return None
-        target_product = self.pip_settings["target_product"]
+        folder_entity = instance.data["folderEntity"]
+        folder_type = folder_entity["folderType"].lower()
+        match folder_type:
+            case "shot":
+                target_product = "reviewReference"
+                target_product_type = "review"
+            case "sequence":
+                target_product = "renderBuild_animatic_refMain"
+                target_product_type = "render"
+        
+        # target_product = self.pip_settings["target_product"]
         # Picture in picture
         project_name = instance.data["projectEntity"]["name"]
         folder_data = instance.data["folderEntity"]
@@ -423,12 +428,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
             instance.data["taskEntity"]
         )
         anatomy_data["product"] = {
-            "type" : "review",
+            "type" : target_product_type,
             "name" : target_product,
         }
         anatomy_data["version"] = pip_entity["version"]
         pip_dir_path = anatomy.get_template_item(
-            "publish", "shot_render", "directory"
+            "publish", f"{folder_type}_render", "directory"
         ).format(anatomy_data)
         # get file
         pip_file_version = "v{0:0>3}".format(pip_entity["version"])
@@ -438,6 +443,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "h264.mp4"
         ])
         pip_file_name = None
+        if not os.path.exists(pip_dir_path):
+            self.log.info(f"could not find any files in {pip_dir_path}")
+            return None
         for file in os.listdir(pip_dir_path):
             if pip_file_target in file:
                 pip_file_name = file
