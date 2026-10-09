@@ -38,7 +38,8 @@ DEFAULT_CREATE_SETTINGS = {
         "mark_for_review": True,
         "include_reference_pip" : False,
         "tasks_to_include_pip": [
-            "Blocking"
+            "Build",
+            "Blocking",
         ],
         "default_variants": [
             "Main"

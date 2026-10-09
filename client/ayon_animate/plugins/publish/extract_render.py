@@ -397,7 +397,18 @@ class ExtractRender(pyblish.api.InstancePlugin):
         if not "target_product" in self.pip_settings:
             self.log.info("No target_product defined in PiP settings.")
             return None
-        target_product = self.pip_settings["target_product"]
+
+        folder_entity = instance.data["folderEntity"]
+        folder_type = folder_entity["folderType"].lower()
+        match folder_type:
+            case "shot":
+                target_product = "reviewReference"
+                target_product_type = "review"
+            case "sequence":
+                target_product = "renderBuild_animatic_refMain"
+                target_product_type = "render"
+        
+        # target_product = self.pip_settings["target_product"]
         # Picture in picture
         project_name = instance.data["projectEntity"]["name"]
         folder_data = instance.data["folderEntity"]
@@ -421,12 +432,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
             instance.data["taskEntity"]
         )
         anatomy_data["product"] = {
-            "type" : "review",
+            "type" : target_product_type,
             "name" : target_product,
         }
         anatomy_data["version"] = pip_entity["version"]
         pip_dir_path = anatomy.get_template_item(
-            "publish", "shot_render", "directory"
+            "publish", f"{folder_type}_render", "directory"
         ).format(anatomy_data)
         # get file
         pip_file_version = "v{0:0>3}".format(pip_entity["version"])
@@ -436,6 +447,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "h264.mp4"
         ])
         pip_file_name = None
+        if not os.path.exists(pip_dir_path):
+            self.log.info(f"could not find any files in {pip_dir_path}")
+            return None
         for file in os.listdir(pip_dir_path):
             if pip_file_target in file:
                 pip_file_name = file

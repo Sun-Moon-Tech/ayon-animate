@@ -28,11 +28,11 @@ class RenderSourceProfile(BaseSettingsModel):
 
 class PictureInPictureSettings(BaseSettingsModel):
     """Settings for picture-in-picture (PiP) burnin when publishing Animate tasks."""
-    target_product: str = SettingsField(
-        "",
-        title="Target Product",
-        description="Target product to use for PiP burnin.",
-    )
+    # target_product: str = SettingsField(
+    #     "",
+    #     title="Target Product",
+    #     description="Target product to use for PiP burnin.",
+    # )
 
     pip_position : str = SettingsField(
         default_factory=list,
@@ -113,7 +113,7 @@ DEFAULT_PUBLISH_SETTINGS = {
             }
         ],
         "picture_in_picture": {
-            "target_product" : "reviewReference",
+            # "target_product" : "reviewReference",
             "pip_position" : "top_left",
             "pip_scale" : 0.25,
             "pip_offset" : 10
