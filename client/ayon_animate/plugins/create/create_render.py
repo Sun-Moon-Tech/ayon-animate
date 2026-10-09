@@ -51,7 +51,7 @@ class RenderCreator(Creator):
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
             "productName": product_name,
-            "renderSource" : pre_create_data.get("export_format")
+            "renderSource" : "mp4"
         }
         data.update(data_update)
         
@@ -126,7 +126,7 @@ class RenderCreator(Creator):
                 "mark_for_review",
                 label="Create separate review",
                 default=False
-            )
+            ),
             EnumDef(
                 "reference_pip_selection",
                 items=[
@@ -144,7 +144,7 @@ class RenderCreator(Creator):
             BoolDef(
                 "mark_for_review",
                 label="Mark for review"
-            )
+            ),
             BoolDef(
                 "include_reference_pip",
                 label="Include reference PiP"

@@ -394,10 +394,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.warning( f"Could not find QuickTime movie at '{movie_path}'")
 
     def _get_pip_entity(self, instance):
-        if not "target_product" in self.pip_settings:
-            self.log.info("No target_product defined in PiP settings.")
-            return None
-
         folder_entity = instance.data["folderEntity"]
         folder_type = folder_entity["folderType"].lower()
         match folder_type:
