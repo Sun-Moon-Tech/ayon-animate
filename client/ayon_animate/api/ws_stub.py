@@ -98,6 +98,28 @@ class AnimateServerStub:
             return False
         return int(result)
 
+    def get_selected_frames(self):
+        result = self.websocketserver.call(
+            self.client.call('Animate.get_selected_frames')
+        )
+        if self._is_evalscript_error(result):
+            return False
+        ## formatting
+        if not result:
+            return None
+        else:
+            result = [int(r) for r in result.split(",")]
+            result = list(set(result))
+            result.sort()
+            return result
+
+    def set_current_frame(self,frame):
+        result = self.websocketserver.call(
+            self.client.call('Animate.set_current_frame', frame=frame)
+        )
+        if self._is_evalscript_error(result):
+            return False
+
     def open(self, path):
         """Open file located at 'path' (local).
 
@@ -404,6 +426,20 @@ class AnimateServerStub:
             self.client.call("Animate.export_png_sequence", path=path)
         )
         return result
+
+    def export_png_frame(self, path, frame):
+        """Export single frame from current document as PNG.
+
+        Args:
+            path (str): path for exported frame
+            frame (int): frame number of the frame to export
+        """
+        
+        result = self.websocketserver.call(
+            self.client.call("Animate.export_png_frame", path=path, frame=frame)
+        )
+        return result
+        
         
     def export_movie(self, path, include_alpha ):
         """Export current document as quictime mov to path.

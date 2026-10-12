@@ -1,12 +1,12 @@
 host_trace = function(message) {
-    // Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
+    //Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
 
-    // try {
-    //     fl.trace("host_trace: " + message);
-    // } catch (_) {
-    //     // Never throw from logger path.
-    //     debugAlert("host_trace: failed trace" );
-    // }
+    try {
+        fl.trace("host_trace: " + message);
+    } catch (_) {
+        // Never throw from logger path.
+        debugAlert("host_trace: failed trace" );
+    }
     return
 }
 
@@ -752,6 +752,24 @@ exportPngSequence = function(path) {
 
 }
 
+exportPngFrame = function(path,frame_in) {
+    host_trace("exportPngFrame called on frame " + frame_in);
+    var doc = fl.getDocumentDOM();
+
+    host_trace("exportPngFrame doc: " + (doc ? "found" : "not found"));
+
+    try {
+        setCurrentFrame(parseInt(frame_in));
+        doc.exportPNG("file:///" + path + ".png", true, true);
+        host_trace("exportPngFrame success: " + path);
+        return true;
+    }
+    catch (e) {
+        host_trace("export failed: " + e);
+    }
+
+}
+
 getTimelineLength = function() {
     var frame_count = 0;
     try {
@@ -768,7 +786,51 @@ getTimelineLength = function() {
     return frame_count;
 }
 
+getSelectedFrames = function(){
+	var tl = fl.getDocumentDOM().getTimeline();
+	var selection = tl.getSelectedFrames();
+	
+	var raw_frames = [];
+	for(var i = 0; i < selection.length; i++) {
+		if(i % 3 === 1){
+			var start_frame = selection[i]+1;
+			// adds first frame to array
+			raw_frames.push(start_frame);
+			// iterates through array
+			if(start_frame < selection[i+1]){
+				for(var f = (start_frame+1); f <= selection[i+1]; f++){
+					raw_frames.push(f);
+				}
+			}
+		}
+	}
+	raw_frames.sort();
+	return raw_frames;
+}
 
+setCurrentFrame = function(frame_in){
+    var frame = -1
+    if(typeof frame == "number"){
+        frame = frame_in
+    } else {
+        try {
+            frame = parseInt(frame_in)
+        }
+        catch (e) {
+            host_trace("could not set frame: " + e);
+            return False
+        }
+    }
+
+    if(frame >= 0){
+        var tl = fl.getDocumentDOM().getTimeline();
+        tl.currentFrame = frame-1;
+        return true;
+    } else {
+        host_trace("number must be larger than zero");
+        return false;
+    }
+}
 
 // function getSelectedLayers() {
 //     try {
