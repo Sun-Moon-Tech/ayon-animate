@@ -94,17 +94,21 @@ class RenderCreator(Creator):
         return api.stub().host_trace(message)
  
     def collect_instances(self):
+        current_context = self.host.get_current_context()
         for instance_data in cache_and_get_instances(self):
+            print(instance_data)
             # legacy instances have family=='image'
             creator_id = (instance_data.get("creator_identifier") or
                           instance_data.get("family"))
+            instance_task = (instance_data.get("task") or None)
 
-            if creator_id == self.identifier:
+            if creator_id == self.identifier and instance_task == current_context["task_name"]:
                 instance_data = self._handle_legacy(instance_data)
                 instance = CreatedInstance.from_existing(
                     instance_data, self
                 )
                 self._add_instance_to_context(instance)
+
 
     def update_instances(self, update_list):
         self.log.debug("update_list:: {}".format(update_list))
