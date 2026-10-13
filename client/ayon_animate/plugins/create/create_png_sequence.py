@@ -153,22 +153,6 @@ class PNGSequenceCreator(Creator):
                 label="Frame range",
                 default=f"1-{self.timeline_length}",
             )
-            # NumberDef(
-            #     "start_frame",
-            #     label="Start frame",
-            #     minimum=1,
-            #     maximum=timeline_length,
-            #     decimals=0,
-            #     default=1,
-            # ),
-            # NumberDef(
-            #     "end_frame",
-            #     label="End frame",
-            #     minimum=1,
-            #     maximum=timeline_length,
-            #     decimals=0,
-            #     default=timeline_length,
-            # )
         ]
         return output
 
