@@ -125,8 +125,8 @@ class RenderCreator(Creator):
         output = [
             BoolDef(
                 "mark_for_review",
-                label="Create separate review",
-                default=False
+                label="Mark for review",
+                default=self.mark_for_review
             ),
             EnumDef(
                 "reference_pip_selection",
