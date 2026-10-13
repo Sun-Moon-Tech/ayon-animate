@@ -1,12 +1,12 @@
 host_trace = function(message) {
     //Commented out to avoid annoying console output during normal operation. Uncomment for dev debugging.
 
-    try {
-        fl.trace("host_trace: " + message);
-    } catch (_) {
-        // Never throw from logger path.
-        debugAlert("host_trace: failed trace" );
-    }
+    // try {
+    //     fl.trace("host_trace: " + message);
+    // } catch (_) {
+    //     // Never throw from logger path.
+    //     debugAlert("host_trace: failed trace" );
+    // }
     return
 }
 
