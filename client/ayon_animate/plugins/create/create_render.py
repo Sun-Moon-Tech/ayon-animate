@@ -94,7 +94,6 @@ class RenderCreator(Creator):
     def collect_instances(self):
         current_context = self.host.get_current_context()
         for instance_data in cache_and_get_instances(self):
-            print(instance_data)
             # legacy instances have family=='image'
             creator_id = (instance_data.get("creator_identifier") or
                           instance_data.get("family"))

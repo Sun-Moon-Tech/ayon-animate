@@ -280,7 +280,6 @@ create the PNG sequence product.
         current_range_start = frame_range[0]
         current_range_end = frame_range[0]
         for frame in frame_range:
-            print(f"frame:{frame},start:{current_range_start},end:{current_range_end}")
             # handle start of list
             if frame == frame_range[0]:
                 continue
@@ -295,7 +294,7 @@ create the PNG sequence product.
                 current_range_start = frame
             # always set range end to current frame
             current_range_end = frame
-            
+
             # end of list
             if frame == frame_range[-1]:
                 if current_range_start == current_range_end:
