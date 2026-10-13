@@ -6,7 +6,6 @@ from ayon_core.pipeline import (
     CreatedInstance,
     CreatorError
 )
-from ayon_core.lib import prepare_template_data
 from ayon_core.pipeline.create import PRODUCT_NAME_ALLOWED_SYMBOLS
 from ayon_animate import api
 from ayon_animate.api.pipeline import cache_and_get_instances
@@ -50,8 +49,7 @@ class RenderCreator(Creator):
 
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
-            "productName": product_name,
-            "renderSource" : "mp4"
+            "productName": product_name
         }
         data.update(data_update)
         
