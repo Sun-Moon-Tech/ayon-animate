@@ -242,6 +242,8 @@ class AnimateServerStub:
 
         for item in result_meta:
             if item.get("members"):
+                if item["members"][0] == None:
+                    continue
                 if int(item["members"][0]) not in layer_ids:
                     continue
 
