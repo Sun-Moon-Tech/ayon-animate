@@ -1,4 +1,4 @@
-"""Debug-only hook to rebuild and install the Animate extension.
+"""Debug-only hook to always rebuild and reinstall the AYON Animate extension.
 
 Equivalent command used for signing:
 C:\scripts\ZXPSignCmd.exe -sign
@@ -27,9 +27,11 @@ class DEBUGInstallAyonExtensionToAnimate(PreLaunchHook):
     order = 1
     launch_types = {LaunchTypes.local}
 
+    # Default signing tool locations from local debug setup.
     signer_executable = Path("C:/scripts/ZXPSignCmd.exe")
     certificate_path = Path("C:/scripts/cert.p12")
     certificate_password_env = "AYON_ANIMATE_ZXP_CERT_PASSWORD"
+    fallback_certificate_password = "ASsiyaskdGNmqPKKggsciutDACT"
 
     def execute(self):
         try:
@@ -70,7 +72,10 @@ class DEBUGInstallAyonExtensionToAnimate(PreLaunchHook):
                 "Extension source folder not found: {}".format(extension_source_path)
             )
 
-        cert_password = os.getenv(self.certificate_password_env)
+        cert_password = os.getenv(
+            self.certificate_password_env,
+            self.fallback_certificate_password,
+        )
 
         if extension_zxp_path.exists():
             extension_zxp_path.unlink()
@@ -97,6 +102,7 @@ class DEBUGInstallAyonExtensionToAnimate(PreLaunchHook):
         self.log.info("Successfully created extension zxp: {}".format(extension_zxp_path))
 
     def _reinstall_extension(self, target_path: Path, extension_zxp_path: Path):
+        # Always remove the currently installed extension before install.
         if target_path.exists():
             self.log.info("Removing existing extension at {}".format(target_path))
             rmtree(target_path)

@@ -1,6 +1,6 @@
 import re
 
-from ayon_core.lib import BoolDef
+from ayon_core.lib import BoolDef, EnumDef
 from ayon_core.pipeline import (
     Creator,
     CreatedInstance,
@@ -34,7 +34,9 @@ class RenderCreator(Creator):
     default_variants = ""
     mark_for_review = True
     active_on_create = True
-    
+    reference_pip_on_create = False
+    tasks_to_include_pip = ["Blocking"]
+
     def create(self, product_name_from_ui, data, pre_create_data):
         stub = api.stub()  # only after Animate is up
         self.host_trace("Creating render instance")
@@ -49,13 +51,24 @@ class RenderCreator(Creator):
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
             "productName": product_name,
+            "renderSource" : "mp4"
         }
         data.update(data_update)
         
         mark_for_review = (pre_create_data.get("mark_for_review") or
                             self.mark_for_review)
         self.host_trace(f"Mark for review: {mark_for_review}")
-        creator_attributes = {"mark_for_review": mark_for_review}
+
+        if pre_create_data.get("reference_pip_selection") == "default":
+            include_reference_pip = (self._check_for_pip(data) or self.reference_pip_on_create)
+        else:
+            include_reference_pip = pre_create_data.get("reference_pip_selection")
+        self.host_trace(f"Include reference PiP: {include_reference_pip}")
+    
+        creator_attributes = {
+            "mark_for_review": mark_for_review,
+            "include_reference_pip": include_reference_pip,
+            }
         data.update({"creator_attributes": creator_attributes})
 
         if not self.active_on_create:
@@ -109,18 +122,19 @@ class RenderCreator(Creator):
 
     def get_pre_create_attr_defs(self):
         output = [
-            BoolDef("use_selection", default=False,
-                    label="Create only for selected"),
-            BoolDef("create_multiple",
-                    default=False,
-                    label="Create separate instance for each selected"),
-            BoolDef("use_layer_name",
-                    default=False,
-                    label="Use layer name in product"),
             BoolDef(
                 "mark_for_review",
                 label="Create separate review",
                 default=False
+            ),
+            EnumDef(
+                "reference_pip_selection",
+                items=[
+                    {"value": "default", "label": "<default for task>"},
+                    {"value": True, "label": "Include reference"},
+                    {"value": False, "label": "Exclude reference"}
+                ],
+                label="Include reference PiP",
             )
         ]
         return output
@@ -129,9 +143,20 @@ class RenderCreator(Creator):
         return [
             BoolDef(
                 "mark_for_review",
-                label="Review"
+                label="Mark for review"
+            ),
+            BoolDef(
+                "include_reference_pip",
+                label="Include reference PiP"
             )
         ]
+
+    def _check_for_pip(self,data):
+        if not "task" in data:
+            return self.reference_pip_on_create
+        task_type = data["task"]
+        target_tasks = [t.lower() for t in self.tasks_to_include_pip]
+        return task_type.lower() in target_tasks
 
     def get_detail_description(self):
         return """Creator for Render instances

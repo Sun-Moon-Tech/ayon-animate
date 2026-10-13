@@ -693,7 +693,7 @@ replacePublishPngProperties = function(profileXml, opts) {
     return newProfile;
 }
 exportSwf = function(path) {
-    fl.trace( "exporting to file:///" + path + ".swf" );
+    host_trace( "exporting to file:///" + path + ".swf" );
     var doc = fl.getDocumentDOM();
     
     if (doc) {
@@ -750,6 +750,22 @@ exportPngSequence = function(path) {
         host_trace("export failed: " + e);
     }
 
+}
+
+getTimelineLength = function() {
+    var frame_count = 0;
+    try {
+        var doc = fl.getDocumentDOM();
+        var timeline = doc.getTimeline();
+        if (timeline && timeline.frameCount) {
+            frame_count = timeline.frameCount;
+            host_trace("got frame count of " + String(frame_count) + " frames")
+        }
+    }
+    catch (e) {
+        host_trace("could not get frame count: " + e);
+    }
+    return frame_count;
 }
 
 
