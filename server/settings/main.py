@@ -12,6 +12,11 @@ class AnimateSettings(BaseSettingsModel):
         description="Triggers pre-launch hook which installs extension."
     )
 
+    workfile_builder: WorkfileBuilderPlugin = SettingsField(
+        default_factory=WorkfileBuilderPlugin,
+        title="Workfile builder"
+    )
+
     create: AnimateCreatorPlugins = SettingsField(
         default_factory=AnimateCreatorPlugins,
         title="Creator plugins"
@@ -22,17 +27,13 @@ class AnimateSettings(BaseSettingsModel):
         title="Publish plugins"
     )
 
-    workfile_builder: WorkfileBuilderPlugin = SettingsField(
-        default_factory=WorkfileBuilderPlugin,
-        title="Workfile Builder"
-    )
 
 DEFAULT_ANIMATE_SETTING = {
     "auto_install_extension": True,
-    "create": DEFAULT_CREATE_SETTINGS,
-    "publish": DEFAULT_PUBLISH_SETTINGS,
     "workfile_builder": {
         "create_first_version": True,
         "custom_templates": []
-    }
+    },
+    "create": DEFAULT_CREATE_SETTINGS,
+    "publish": DEFAULT_PUBLISH_SETTINGS,
 }
