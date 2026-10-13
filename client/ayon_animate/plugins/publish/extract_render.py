@@ -1,5 +1,5 @@
 import subprocess
-import os, json
+import os
 from pathlib import Path
 from ayon_core.lib.vendor_bin_utils import get_ffmpeg_tool_args
 
@@ -11,7 +11,6 @@ from ayon_core.pipeline import (
     Anatomy
 )
 from ayon_core.pipeline.template_data import get_template_data
-from ayon_core.lib import path_tools
 from ayon_animate import api as animate
 
 class ExtractRender(pyblish.api.InstancePlugin):
@@ -29,12 +28,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
     settings_category = "animate"
 
     creator_attributes = None
-    render_source = "mp4"
     pip_settings = None
-
-    frame_start = 1
-    frame_end = 1
-    fps = 0
+    timeline_length = 0
 
     def host_trace(self, message):
         return animate.stub().host_trace(message)
@@ -45,30 +40,43 @@ class ExtractRender(pyblish.api.InstancePlugin):
 
         self.creator_attributes = instance.data.get("creator_attributes")
         self.log.debug(self.creator_attributes)
-        if "renderSource" in instance.data:
-            self.render_source = instance.data.get("renderSource")
 
-        self.frame_start = instance.data.get("frameStart", 0) if not ("start_frame" in self.creator_attributes) else self.creator_attributes["start_frame"]
-        self.frame_end = instance.data.get("frameEnd", 1) if not ("end_frame" in self.creator_attributes) else self.creator_attributes["end_frame"]
-        self.fps =  instance.data.get("fps", 25)
-        self.log.info( f"Start frame: {self.frame_start}; End frame: {self.frame_end}; FPS: {self.fps}")
-
-        if not "include_pngs" in self.creator_attributes:
-            self.creator_attributes["include_pngs"] = False
-
+        # API init
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
         
         doc_name = stub.get_active_document_name()
         if not doc_name:
             raise RuntimeError("No active Animate document")
-        
+        self.timeline_length = stub.get_timeline_length()
+
         file_basename = Path(doc_name).stem
         instance_name = instance.data["name"]
         task_type = instance.data.get("task")
         output_basename = f"{file_basename}_{instance_name}"
         output_path = os.path.join(staging_dir, output_basename)
 
+
+        # render settings from 
+        render_source = self._get_render_source(instance.data)
+        frame_start = instance.data.get("frameStart", 1)
+        frame_end = instance.data.get("frameEnd", self.timeline_length)
+        fps =  instance.data.get("fps", 25)
+        self.log.info( f"Start frame: {frame_start}; End frame: {frame_end}; FPS: {fps}")
+
+        # png renderer handling
+        if render_source == "png":
+            # fetch and validate render type
+            frame_range_string = self.creator_attributes.get("frame_range",False)
+            if not frame_range_string or frame_range_string == f"1-{self.timeline_length}":
+                frame_range = "all"
+            else:
+                frame_range = self._get_png_frame_range(frame_range_string)
+                self.log.debug(f"PNG exporter will export frames: {str(frame_range)}")
+            ## whether or not to include PNGs
+            if not "include_pngs" in self.creator_attributes:
+                self.creator_attributes["include_pngs"] = False
+        
         ## attempt to get picture-in-picture working
         pip_file_path = None
         if "include_reference_pip" in self.creator_attributes:
@@ -98,22 +106,16 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 self.log.info( f"swf_tasks found: {self.swf_tasks}" )
                 is_swf_task = self._get_swf_settings( task_type, self.swf_tasks )
             
-        ## check for default render source
-        # self.render_source = getattr(self, "self.render_source", None)
-        # if not self.render_source:
-        #     self.log.warning(f"No render source specified, defaulting to '{self.render_source}'")
-
-        # fixing legacy settings
-        if self.render_source == "h264":
-            self.render_source = "mp4"
-
         self.log.info(f"Export SWF: {is_swf_task}" )
-        self.log.info(f"Render source mode: {self.render_source}" )
+        self.log.info(f"Render source mode: {render_source}" )
 
 
-        if self.render_source == "png":
+        if render_source == "png":
             self.log.info(f"Exporting PNG sequence to {staging_dir}")
-            self._export_png_sequence(output_path)
+            if frame_range == "all":
+                self._export_png_sequence(output_path)
+            else:
+                self._export_png_range(output_path,frame_range)
 
             frame_files = self._collect_exported_frames(staging_dir, output_basename)
             if not frame_files:
@@ -122,8 +124,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 )
             self.log.info(f"Exported {len(frame_files)} frames")
 
-            first_frame = max(0,self.frame_start-1)
-            frame_output = frame_files[first_frame:self.frame_end]
+            # first_frame = max(0,frame_start-1)
+            # frame_output = frame_files[first_frame:frame_end]
             mp4_output = self._convert_sequence_to_mp4(staging_dir,output_basename)
             self.log.info(f"Converted PNG sequence to MP4: {mp4_output}")
         else:
@@ -131,7 +133,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
             movie = self.export_movie(output_path)
             video_output = self._adjust_mov_paths(movie, staging_dir, output_basename)
 
-            if self.render_source == "mp4":
+            if render_source == "mp4":
                 mp4_output = self._convert_movie_to_mp4(
                     video_output,
                     staging_dir,
@@ -160,15 +162,15 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.info(f"Exported SWF: {swf_output}")
         
         # This is where we define the representations for the extracted media. Can change this to include the mp4 option instead or as well. 
-        if self.render_source == "mov":
+        if render_source == "mov":
             representation = {
                 "name": "mov",
                 "ext": "mov",
                 "files": video_output,
                 "stagingDir": staging_dir,
-                "frameStart": self.frame_start,
-                "frameEnd": self.frame_end,
-                "fps": self.fps,
+                "frameStart": frame_start,
+                "frameEnd": frame_end,
+                "fps": fps,
                 "tags": ["review"],
             }
         else:
@@ -177,24 +179,34 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 "ext": "mp4",
                 "files": mp4_output,
                 "stagingDir": staging_dir,
-                "frameStart": self.frame_start,
-                "frameEnd": self.frame_end,
-                "fps": self.fps,
+                "frameStart": frame_start,
+                "frameEnd": frame_end,
+                "fps": fps,
                 "tags": ["review"],
             }
         instance.data["representations"].append(representation)
 
-        if self.render_source == "png" and self.creator_attributes["include_pngs"]:
+        if render_source == "png" and self.creator_attributes["include_pngs"]:
+            if len(frame_files) > 1:
                 png_representation = {
                     "name": "png",
                     "ext": "png",
-                    "files": frame_output,
+                    "files": frame_files,
                     "stagingDir": staging_dir,
-                    "frameStart": self.frame_start,
-                    "frameEnd": self.frame_end,
+                    "frameStart": frame_start,
+                    "frameEnd": frame_end,
                     "tags": [],
                 }
                 instance.data["representations"].append(png_representation)
+            else:
+                png_representation = {
+                    "name": "png",
+                    "ext": "png",
+                    "files": frame_files[0],
+                    "stagingDir": staging_dir,
+                    "tags": [],
+                }
+                instance.data["representations"].append(png_representation)         
 
         if swf_output:
             swf_representation = {
@@ -202,15 +214,15 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 "ext": "swf",
                 "files": swf_output,
                 "stagingDir": staging_dir,
-                "frameStart": self.frame_start,
-                "frameEnd": self.frame_end,
-                "fps": self.fps,
+                "frameStart": frame_start,
+                "frameEnd": frame_end,
+                "fps": fps,
                 "tags": [],
             }
             instance.data["representations"].append(swf_representation)
         
         instance.data["stagingDir"] = staging_dir
-        
+        print(instance.data["representations"])
         self.log.info(f"Extracted {instance.data['name']} to {staging_dir}")
 
     def _get_render_profile(self,task_type):
@@ -237,6 +249,15 @@ class ExtractRender(pyblish.api.InstancePlugin):
         result = animate.stub().export_png_sequence(export_path)
         if not result or result is False:
             raise RuntimeError("Failed to export PNG sequence from Animate")
+
+    def _export_png_range(self,output_path,frame_range):
+        export_path = str(output_path).replace("\\", "/")
+
+        for f in range(0,len(frame_range)):
+            png_path = export_path + f"{f:04d}"
+            result = animate.stub().export_png_frame(png_path,frame_range[f])
+            if not result or result is False:
+                raise RuntimeError("Failed to export PNG frame from Animate")
 
     def export_movie(self, output_path):
         export_path = str(output_path).replace("\\", "/")
@@ -271,7 +292,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         """Convert exported PNG sequence to MP4 using ffmpeg"""
         mp4_path = os.path.join(staging_dir, f"{basename}.mp4")
 
-        frame_length = (self.frame_end-self.frame_start)+1
+        # frame_length = (frame_end-frame_start)+1
         bg_colour = getattr(self,"png_bg_colour","#666666")
 
         png_pattern = os.path.join(staging_dir, f"{basename}%04d.png")
@@ -279,12 +300,12 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "-y",
             "-framerate",
             "25",
-            "-start_number",
-            str(self.frame_start),
+            # "-start_number",
+            # str(frame_start),
             "-i",
             png_pattern,
-            "-frames:v",
-            str(frame_length),
+            # "-frames:v",
+            # str(frame_length),
             "-filter_complex",
             f"color='{bg_colour}',format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1",
             "-c:v",
@@ -518,3 +539,82 @@ class ExtractRender(pyblish.api.InstancePlugin):
     def staging_dir(self, instance):
         from ayon_core.pipeline.publish import get_instance_staging_dir
         return get_instance_staging_dir(instance)
+
+    def _get_render_source(self, data):
+        if data.get("creator_identifier") == "png_sequence":
+            return "png"
+        if self.creator_attributes.get("render_source",None):
+            return self.creator_attributes["render_source"]
+        return "mp4"
+
+    def _get_png_frame_range(self,frame_string):
+        # sanitise
+        clean_frame_string = frame_string
+        valid_chars = ["0","1","2","3","4","5","6","7","8","9","-",","]
+        unique_chars = list(dict.fromkeys([c for c in frame_string]))
+        for char in unique_chars:
+            if char not in valid_chars:
+                clean_frame_string = clean_frame_string.replace(char,"")
+        # validate list
+        frame_list = clean_frame_string.split(",")
+        if len(frame_list) == 0:
+            if frame_string.isdigit():
+                return [int(frame_string)]
+            else:
+                raise RuntimeError(f"""Could not parse frame_range '{frame_string}' to a valid frame range.
+Check the formatting is correct. Frame ranges should only contain numeric characters,
+commas and dashes (i.e. '1-5,6,10')""")
+        # now we convert
+        frames = []
+        for frame_range in frame_list:
+            if "-" in frame_range: # single frame
+                frames += self._range_to_int(frame_range)
+            elif frame_range.isdigit():
+                frames.append(int(frame_range))
+            else:
+                raise RuntimeError(f"Frame range of '{frame_string}' is invalid at value: '{frame_range}'")
+        self.log.debug(f"frame range pre-validation: {frames}")
+        frames = self._validate_frame_range(frames)
+        if len(frames) == 0:
+                raise RuntimeError(f"""Could not parse frame_range '{frame_string}' to a valid frame range.
+Check the formatting is correct. Frame ranges should only contain numeric characters,
+commas and dashes (i.e. '1-5,6,10')""")
+        return frames
+
+    def _range_to_int(self,range_string):
+        frames = []
+        frame_range = range_string.split("-")
+        match len(frame_range):
+            case 1:
+                frames.append(int(frame_range[0]))
+            case 2:
+                # validate
+                try:
+                    start_frame = abs(int(frame_range[0]))
+                    end_frame = abs(int(frame_range[1]))
+                except Exception as e:
+                    raise RuntimeError(f"Could not get start and end frames for '{frame_range}': {e}.")
+                if start_frame == end_frame:
+                    frames.append(start_frame)  
+                elif start_frame < end_frame:
+                    for f in range(start_frame,end_frame+1):
+                        frames.append(f)
+                else:
+                    raise RuntimeError(f"Could not parse '{frame_range}'. Second value is lower than first value.")
+            case _:
+                raise RuntimeError(f"Could not parse '{frame_range}'. More than two values detected.")
+        return frames
+
+    def _validate_frame_range(self,frame_range):
+        frames_out=[]
+        for frame in frame_range:
+            # remove frames outside frame range
+            if (frame <= 0) or (frame > self.timeline_length):
+                self.log.debug(f"skipping frame {frame} as this is outside the timeline range (expecting 1 to {self.timeline_length})")
+                continue
+            # skip duplicates
+            if frame in frames_out:
+                continue
+            frames_out.append(frame)
+        frames_out.sort()
+        return frames_out
