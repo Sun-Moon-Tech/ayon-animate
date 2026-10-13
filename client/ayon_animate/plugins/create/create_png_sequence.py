@@ -280,17 +280,26 @@ create the PNG sequence product.
         current_range_start = frame_range[0]
         current_range_end = frame_range[0]
         for frame in frame_range:
-            # handle start and end of array
+            print(f"frame:{frame},start:{current_range_start},end:{current_range_end}")
+            # handle start of list
             if frame == frame_range[0]:
                 continue
-            elif frame == frame_range[-1]:
-                current_range_end = frame
+
             # calculate if the range needs to go in the list
-            if (frame != current_range_end+1) or (frame == frame_range[-1]):
+            if (frame > current_range_end+1):
                 if current_range_start == current_range_end:
-                    frame_list.append(str(current_range_start))
+                    frame_list.append(current_range_start)
                 else:
                     frame_list.append(f"{current_range_start}-{current_range_end}")
+                # restart range
                 current_range_start = frame
+            # always set range end to current frame
             current_range_end = frame
-        return ",".join(frame_list)
+            
+            # end of list
+            if frame == frame_range[-1]:
+                if current_range_start == current_range_end:
+                    frame_list.append(current_range_start)
+                else:
+                    frame_list.append(f"{current_range_start}-{current_range_end}")
+        return ",".join(str(f) for f in frame_list)
