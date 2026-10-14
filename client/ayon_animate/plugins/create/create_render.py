@@ -26,7 +26,7 @@ class RenderCreator(Creator):
     label = "Render"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Render creator"
+    description = "Creates a video render of the current scene as a h264 MP4."
     settings_category = "animate"
 
     # Settings
@@ -135,7 +135,7 @@ class RenderCreator(Creator):
                     {"value": True, "label": "Include reference"},
                     {"value": False, "label": "Exclude reference"}
                 ],
-                label="Include reference PiP",
+                label="Animatic reference",
             )
         ]
         return output

@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
 """Package declaring AYON addon 'animate' version."""
-__version__ = "1.1.3+prerelease"
+__version__ = "1.1.3+prerelease.2"

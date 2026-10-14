@@ -24,10 +24,11 @@ class PNGSequenceCreator(Creator):
     """Renders the current scene as a PNG sequence.
     """
     identifier = "png_sequence"
-    label = "PNG sequence"
+    label = "Render (PNG sequence)"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Creates a PNG sequence of the timeline, and uploads the PNGs and rendered video."
+    description = """Creates a PNG sequence of the timeline, and uploads the PNGs and a compiled video.
+NOTE: This render type does not support audio."""
     settings_category = "animate"
 
     # Settings
@@ -288,6 +289,9 @@ create the PNG sequence product.
             if (frame > current_range_end+1):
                 if current_range_start == current_range_end:
                     frame_list.append(current_range_start)
+                elif current_range_end == current_range_start+1:
+                    frame_list.append(current_range_start)
+                    frame_list.append(current_range_end)
                 else:
                     frame_list.append(f"{current_range_start}-{current_range_end}")
                 # restart range
