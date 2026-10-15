@@ -93,14 +93,13 @@ class RenderCreator(Creator):
         return api.stub().host_trace(message)
  
     def collect_instances(self):
-        current_context = self.host.get_current_context()
         for instance_data in cache_and_get_instances(self):
             # legacy instances have family=='image'
             creator_id = (instance_data.get("creator_identifier") or
                           instance_data.get("family"))
             instance_task = (instance_data.get("task") or None)
 
-            if creator_id == self.identifier and instance_task == current_context["task_name"]:
+            if creator_id == self.identifier:
                 instance_data = self._handle_legacy(instance_data)
                 instance = CreatedInstance.from_existing(
                     instance_data, self
@@ -207,6 +206,17 @@ class RenderCreator(Creator):
 
         if not instance_data.get("task"):
             instance_data["task"] = self.create_context.get_current_task_name()
+        if instance_data.get("task") != self.host.get_current_context().get("task_name"):
+            # update task
+            old_task = instance_data.get("task")
+            instance_data["task"] = self.host.get_current_context().get("task_name")
+            # update name
+            product_name = instance_data.get("productName")
+            instance_data["productName"] = product_name.replace(old_task.title(), instance_data["task"].title())
+            instance_data["creator_attributes"]["include_reference_pip"] = self._check_for_pip(instance_data)
+
+        if not instance_data.get("renderSource"):
+            instance_data["renderSource"] = "mp4"
 
         if not instance_data.get("variant"):
             instance_data["variant"] = ""

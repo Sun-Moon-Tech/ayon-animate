@@ -16,8 +16,8 @@ import os
 
 FRAME_RANGE_ENUM = [
     {"value": "all", "label": "entire sequence"},
-    {"value": "selected", "label": "selection in timeline"},
     {"value": "range", "label": "frame range"},
+    {"value": "selected", "label": "selection in timeline"},
 ]
 
 class PNGSequenceCreator(Creator):
@@ -223,9 +223,19 @@ NOTE: This render type does not support audio."""
 
         if not instance_data.get("task"):
             instance_data["task"] = self.create_context.get_current_task_name()
+        if instance_data.get("task") != self.host.get_current_context().get("task_name"):
+            # update task
+            old_task = instance_data.get("task")
+            instance_data["task"] = self.host.get_current_context().get("task_name")
+            # update name
+            product_name = instance_data.get("product_name")
+            instance_data["product_name"] = product_name.replace(old_task.title(), instance_data["task"].title())
 
         if not instance_data.get("variant"):
             instance_data["variant"] = ""
+
+        if not instance_data.get("renderSource"):
+            instance_data["renderSource"] = "png"
 
         if not instance_data["creator_attributes"].get("frame_range"):
             start_frame = instance_data["creator_attributes"].get("start_frame",1)
