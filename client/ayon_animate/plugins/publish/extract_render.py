@@ -222,7 +222,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
             instance.data["representations"].append(swf_representation)
         
         instance.data["stagingDir"] = staging_dir
-        print(instance.data["representations"])
         self.log.info(f"Extracted {instance.data['name']} to {staging_dir}")
 
     def _get_render_profile(self,task_type):
