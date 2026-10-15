@@ -49,7 +49,8 @@ class RenderCreator(Creator):
 
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
-            "productName": product_name
+            "productName": product_name,
+            "renderSource" : "mp4"
         }
         data.update(data_update)
         

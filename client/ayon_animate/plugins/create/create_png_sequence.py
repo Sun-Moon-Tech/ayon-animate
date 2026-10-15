@@ -52,7 +52,8 @@ NOTE: This render type does not support audio."""
 
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
-            "productName": product_name
+            "productName": product_name,
+            "renderSource" : "png"
         }
         data.update(data_update)
         

@@ -541,11 +541,13 @@ class ExtractRender(pyblish.api.InstancePlugin):
         return get_instance_staging_dir(instance)
 
     def _get_render_source(self, data):
-        if data.get("creator_identifier") == "png_sequence":
-            return "png"
-        if self.creator_attributes.get("render_source",None):
-            return self.creator_attributes["render_source"]
-        return "mp4"
+        render_source = data.get("renderSource",None)
+        if not render_source:
+            return "mp4"
+        if render_source in ["png","mp4","mov"]:
+            return render_source
+        else:
+            return "mp4"
 
     def _get_png_frame_range(self,frame_string):
         # sanitise
