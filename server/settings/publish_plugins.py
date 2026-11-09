@@ -20,20 +20,9 @@ class RenderSourceProfile(BaseSettingsModel):
         enum_resolver=task_types_enum
     )
     export_swf: bool = SettingsField(True, title="Export SWF")
-    # render_source: str = SettingsField(
-    #     "",
-    #     title="Render source",
-    #     description="Render source for the given task type(s). Expects a value from: movie, h264, png_sequence"
-    # )
 
 class PictureInPictureSettings(BaseSettingsModel):
     """Settings for picture-in-picture (PiP) burnin when publishing Animate tasks."""
-    # target_product: str = SettingsField(
-    #     "",
-    #     title="Target Product",
-    #     description="Target product to use for PiP burnin.",
-    # )
-
     pip_position : str = SettingsField(
         default_factory=list,
         title="PiP Position",
@@ -62,12 +51,6 @@ class ExtractRenderSettings(BaseSettingsModel):
         description="List of tasks to render swfs on publish.",
         enum_resolver=task_types_enum
     )
-
-    # render_source: str = SettingsField(
-    #     "",
-    #     title="Default render source",
-    #     description="Default render source if not specified for the given task. Expects a value from: movie, h264, png_sequence"
-    # )
 
     include_alpha_in_mov : bool = SettingsField(
         False,
@@ -102,18 +85,15 @@ class PublishPlugins(BaseSettingsModel):
 DEFAULT_PUBLISH_SETTINGS = {
     "ExtractRender": {
         "swf_tasks": ["Animation"],
-        # "render_source" : "h264",
         "include_alpha_in_mov" : False,
         "png_bg_colour" : "#666666",
         "task_render_profiles": [
             {
                 "task_types": ["Animation"],
                 "export_swf": True
-                # "render_source":"h264"
             }
         ],
         "picture_in_picture": {
-            # "target_product" : "reviewReference",
             "pip_position" : "top_left",
             "pip_scale" : 0.25,
             "pip_offset" : 10

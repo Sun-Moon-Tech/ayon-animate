@@ -25,11 +25,28 @@ class CreateRenderPluginModel(BaseSettingsModel):
         title="Default Variants"
     )
 
+class CreatePNGSequencePluginModel(BaseSettingsModel):
+    enabled: bool = SettingsField(True, title="Enabled")
+    active_on_create: bool = SettingsField(True, title="Active by default")
+    mark_for_review: bool = SettingsField(False, title="Review by default")
+    pngs_on_create: bool = SettingsField(False, title="Include PNGs by default")
+    default_variants: list[str] = SettingsField(
+        default_factory=list,
+        title="Default Variants"
+    )
+
+
 class AnimateCreatorPlugins(BaseSettingsModel):
     RenderCreator: CreateRenderPluginModel = SettingsField(
         title="Create Render",
         default_factory=CreateRenderPluginModel,
     )
+
+    PNGSequenceCreator: CreatePNGSequencePluginModel = SettingsField(
+        title="Create PNG sequence",
+        default_factory=CreatePNGSequencePluginModel,
+    )
+
 
 DEFAULT_CREATE_SETTINGS = {
     "RenderCreator": {
@@ -41,6 +58,15 @@ DEFAULT_CREATE_SETTINGS = {
             "Build",
             "Blocking",
         ],
+        "default_variants": [
+            "Main"
+        ]
+    },
+    "PNGSequenceCreator" : {
+        "enabled": True,
+        "active_on_create": True,
+        "mark_for_review": True,
+        "pngs_on_create" : True,
         "default_variants": [
             "Main"
         ]

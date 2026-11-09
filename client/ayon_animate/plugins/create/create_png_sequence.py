@@ -1,12 +1,9 @@
-import re
-
-from ayon_core.lib import BoolDef, NumberDef
+from ayon_core.lib import BoolDef, EnumDef, TextDef
 from ayon_core.pipeline import (
     Creator,
     CreatedInstance,
     CreatorError
 )
-from ayon_core.lib import prepare_template_data
 from ayon_core.pipeline.create import PRODUCT_NAME_ALLOWED_SYMBOLS
 from ayon_animate import api
 from ayon_animate.api.pipeline import cache_and_get_instances
@@ -17,20 +14,29 @@ import os
 # Likely workflow will be: export image seq and swf from Animate. Swf will be autocreated as one instance, png seq will be used as an inbetween step via ffmpeg
 # in order to publish either mp4s or pngs depending on the created instance. Animate doesn't have a way to export mp4s directly, so ffmpeg is the only option. 
 
+FRAME_RANGE_ENUM = [
+    {"value": "all", "label": "entire sequence"},
+    {"value": "range", "label": "frame range"},
+    {"value": "selected", "label": "selection in timeline"},
+]
+
 class PNGSequenceCreator(Creator):
     """Renders the current scene as a PNG sequence.
     """
     identifier = "png_sequence"
-    label = "PNG sequence"
+    label = "Render (PNG sequence)"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Creates a PNG sequence of the timeline, and uploads the PNGs and rendered video."
+    description = """Creates a PNG sequence of the timeline, and uploads the PNGs and a compiled video.
+NOTE: This render type does not support audio."""
     settings_category = "animate"
 
     # Settings
     default_variants = ""
     mark_for_review = True
     active_on_create = True
+    pngs_on_create = False
+
     timeline_length = 0
 
     def create(self, product_name_from_ui, data, pre_create_data):
@@ -47,23 +53,33 @@ class PNGSequenceCreator(Creator):
         product_name = clean_product_name(product_name_from_ui)
         data_update = {
             "productName": product_name,
-            "renderSource" : "png",
+            "renderSource" : "png"
         }
         data.update(data_update)
         
         mark_for_review = (pre_create_data.get("mark_for_review") or
                             self.mark_for_review)
         self.host_trace(f"Mark for review: {mark_for_review}")
-        start_frame = (pre_create_data.get("start_frame") or 0)
-        end_frame = (pre_create_data.get("end_frame") or self.get_timeline_length())
-        self.host_trace(f"Will export from frame {start_frame} to {end_frame}")
         include_pngs = (pre_create_data.get("include_pngs") or False)
         self.host_trace(f"Include PNGs in publish: {include_pngs}")
+
+        # start_frame = (pre_create_data.get("start_frame") or 0)
+        # end_frame = (pre_create_data.get("end_frame") or self.get_timeline_length())
+        frame_range_type = (pre_create_data.get("frame_range_type") or "all")
+        match frame_range_type:
+            case "all":
+                frame_range = f"1-{self.timeline_length}"
+            case "range":
+                frame_range = pre_create_data.get("frame_range",f"1-{self.timeline_length}")
+            case "selected" : 
+                raw_frames = stub.get_selected_frames()
+                frame_range = self._frame_range_to_text(raw_frames)
+        self.host_trace(f"Frame range: {frame_range}")
+            
         creator_attributes = {
             "mark_for_review": mark_for_review,
             "include_pngs" : include_pngs,
-            "start_frame": start_frame,
-            "end_frame": end_frame
+            "frame_range" : frame_range,
             }
         data.update({"creator_attributes": creator_attributes})
 
@@ -104,6 +120,7 @@ class PNGSequenceCreator(Creator):
     def update_instances(self, update_list):
         self.log.debug("update_list:: {}".format(update_list))
         for created_inst, _changes in update_list:
+            
             if created_inst.get("layer"):
                 # not storing PSItem layer to metadata
                 created_inst.pop("layer")
@@ -120,29 +137,23 @@ class PNGSequenceCreator(Creator):
         output = [
             BoolDef(
                 "mark_for_review",
-                label="Create separate review",
-                default=False
+                label="Mark for review",
+                default=self.mark_for_review
             ),
             BoolDef(
                 "include_pngs",
                 label="Include PNGs in publish",
-                default=False
+                default=self.pngs_on_create
             ),
-            NumberDef(
-                "start_frame",
-                label="Start frame",
-                minimum=1,
-                maximum=self.timeline_length,
-                decimals=0,
-                default=1,
+            EnumDef(
+                "frame_range_type",
+                label="Export frames from",
+                items=FRAME_RANGE_ENUM,
             ),
-            NumberDef(
-                "end_frame",
-                label="End frame",
-                minimum=1,
-                maximum=self.timeline_length,
-                decimals=0,
-                default=self.timeline_length,
+            TextDef(
+                "frame_range",
+                label="Frame range",
+                default=f"1-{self.timeline_length}",
             )
         ]
         return output
@@ -158,21 +169,10 @@ class PNGSequenceCreator(Creator):
                 label="Include PNGs in publish",
                 default=False
             ),
-            NumberDef(
-                "start_frame",
-                label="Start frame",
-                minimum=0,
-                maximum=self.timeline_length,
-                decimals=0,
-                default=0,
-            ),
-            NumberDef(
-                "end_frame",
-                label="End frame",
-                minimum=0,
-                maximum=self.timeline_length,
-                decimals=0,
-                default=self.timeline_length,
+            TextDef(
+                "frame_range",
+                label="Frame range",
+                default="0",
             )
         ]
 
@@ -223,9 +223,31 @@ class PNGSequenceCreator(Creator):
 
         if not instance_data.get("task"):
             instance_data["task"] = self.create_context.get_current_task_name()
+        if instance_data.get("task") != self.host.get_current_context().get("task_name"):
+            # update task
+            old_task = instance_data.get("task")
+            instance_data["task"] = self.host.get_current_context().get("task_name")
+            # update name
+            product_name = instance_data.get("product_name")
+            instance_data["product_name"] = product_name.replace(old_task.title(), instance_data["task"].title())
 
         if not instance_data.get("variant"):
             instance_data["variant"] = ""
+
+        if not instance_data.get("renderSource"):
+            instance_data["renderSource"] = "png"
+
+        if not instance_data["creator_attributes"].get("frame_range"):
+            start_frame = instance_data["creator_attributes"].get("start_frame",1)
+            end_frame = instance_data["creator_attributes"].get("end_frame",self.timeline_length)
+            frame_range = [i for i in range(start_frame,end_frame+1)]
+            instance_data["creator_attributes"]["frame_range"] = self._frame_range_to_text(frame_range)
+
+        for var_name in ["start_frame","end_frame","render_source"]:
+            if instance_data.get(var_name):
+                instance_data.pop(var_name)
+            if instance_data["creator_attributes"].get(var_name):
+                instance_data["creator_attributes"].pop(var_name)
 
         return instance_data
 
@@ -252,3 +274,46 @@ class PNGSequenceCreator(Creator):
             if layer_name:
                 return {"layer": layer_name}
         return {"layer": "{layer}"}
+
+
+    def _frame_range_to_text(self,frame_range):
+        frame_list = []
+        if frame_range == None:
+            raise CreatorError("""
+Could not convert frame range as frame range is empty.
+
+If you have 'selection in timeline' selected, make sure the frames are highlighted before trying to
+create the PNG sequence product.
+            """)
+        # check if single frame is present
+        if len(frame_range) == 1:
+            return str(frame_range[0])
+        # iterate to get frame range as clean text
+        current_range_start = frame_range[0]
+        current_range_end = frame_range[0]
+        for frame in frame_range:
+            # handle start of list
+            if frame == frame_range[0]:
+                continue
+
+            # calculate if the range needs to go in the list
+            if (frame > current_range_end+1):
+                if current_range_start == current_range_end:
+                    frame_list.append(current_range_start)
+                elif current_range_end == current_range_start+1:
+                    frame_list.append(current_range_start)
+                    frame_list.append(current_range_end)
+                else:
+                    frame_list.append(f"{current_range_start}-{current_range_end}")
+                # restart range
+                current_range_start = frame
+            # always set range end to current frame
+            current_range_end = frame
+
+            # end of list
+            if frame == frame_range[-1]:
+                if current_range_start == current_range_end:
+                    frame_list.append(current_range_start)
+                else:
+                    frame_list.append(f"{current_range_start}-{current_range_end}")
+        return ",".join(str(f) for f in frame_list)

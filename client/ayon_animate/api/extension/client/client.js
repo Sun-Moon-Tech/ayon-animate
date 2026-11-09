@@ -387,6 +387,7 @@
                       return result;
                   });
       });
+
       RPC.addRoute('Animate.export_png_sequence', function (data) {
         return runEvalScript("(function(){var path=" + JSON.stringify(String(data.path || '')) + ";try{var p=String(path||'');if(!p){return false;}p=p.split('\\\\').join('/');if(typeof exportPngSequence==='function'){return !!exportPngSequence(p);}return false;}catch(e){return false;}})()", {
           label: 'Animate.export_png_sequence',
@@ -397,6 +398,27 @@
             return result;
         });
       });
+  
+      RPC.addRoute('Animate.export_png_frame', function (data) {
+        var path = JSON.stringify(String(data.path || ''))
+        var frame = JSON.stringify(String(data.frame || '0' ))
+
+        return runEvalScript("(function(){var path=" + path + ";var frame=" + frame + ";try{var p=String(path||'');if(!p){return false;}p=p.split('\\\\').join('/');if(typeof exportPngFrame==='function'){return !!exportPngFrame(p,frame);}return false;}catch(e){return false;}})()", {
+          label: 'Animate.export_png_frame',
+          retryOnEvalError: false,
+          fallback: ''
+        }).then(function(result){
+          //   log.warn("export_png_frame: " + result);
+            return result;
+        });
+      });
+
+
+      RPC.addRoute('Animate.set_current_frame', function (data) {
+        var frame = JSON.stringify(String((data && data.frame) || ''));
+        return runEvalScript("setCurrentFrame(" + frame + ")")
+      })
+
 
       RPC.addRoute('Animate.export_movie', function (data) {
         var encodedPath = JSON.stringify(String((data && data.path) || ''));
@@ -411,6 +433,13 @@
 
       RPC.addRoute('Animate.get_timeline_length', function (data) {
           return runEvalScript("getTimelineLength()")
+                  .then(function(result){
+                    //   log.warn("save: " + result);
+                      return result;
+                  });
+      });
+      RPC.addRoute('Animate.get_selected_frames', function (data) {
+          return runEvalScript("getSelectedFrames()")
                   .then(function(result){
                     //   log.warn("save: " + result);
                       return result;

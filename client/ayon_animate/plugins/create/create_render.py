@@ -6,7 +6,6 @@ from ayon_core.pipeline import (
     CreatedInstance,
     CreatorError
 )
-from ayon_core.lib import prepare_template_data
 from ayon_core.pipeline.create import PRODUCT_NAME_ALLOWED_SYMBOLS
 from ayon_animate import api
 from ayon_animate.api.pipeline import cache_and_get_instances
@@ -27,7 +26,7 @@ class RenderCreator(Creator):
     label = "Render"
     product_base_type = "render"
     product_type = product_base_type
-    description = "Render creator"
+    description = "Creates a video render of the current scene as a h264 MP4."
     settings_category = "animate"
 
     # Settings
@@ -98,6 +97,7 @@ class RenderCreator(Creator):
             # legacy instances have family=='image'
             creator_id = (instance_data.get("creator_identifier") or
                           instance_data.get("family"))
+            instance_task = (instance_data.get("task") or None)
 
             if creator_id == self.identifier:
                 instance_data = self._handle_legacy(instance_data)
@@ -105,6 +105,7 @@ class RenderCreator(Creator):
                     instance_data, self
                 )
                 self._add_instance_to_context(instance)
+
 
     def update_instances(self, update_list):
         self.log.debug("update_list:: {}".format(update_list))
@@ -124,8 +125,8 @@ class RenderCreator(Creator):
         output = [
             BoolDef(
                 "mark_for_review",
-                label="Create separate review",
-                default=False
+                label="Mark for review",
+                default=self.mark_for_review
             ),
             EnumDef(
                 "reference_pip_selection",
@@ -134,7 +135,7 @@ class RenderCreator(Creator):
                     {"value": True, "label": "Include reference"},
                     {"value": False, "label": "Exclude reference"}
                 ],
-                label="Include reference PiP",
+                label="Animatic reference",
             )
         ]
         return output
@@ -205,6 +206,17 @@ class RenderCreator(Creator):
 
         if not instance_data.get("task"):
             instance_data["task"] = self.create_context.get_current_task_name()
+        if instance_data.get("task") != self.host.get_current_context().get("task_name"):
+            # update task
+            old_task = instance_data.get("task")
+            instance_data["task"] = self.host.get_current_context().get("task_name")
+            # update name
+            product_name = instance_data.get("productName")
+            instance_data["productName"] = product_name.replace(old_task.title(), instance_data["task"].title())
+            instance_data["creator_attributes"]["include_reference_pip"] = self._check_for_pip(instance_data)
+
+        if not instance_data.get("renderSource"):
+            instance_data["renderSource"] = "mp4"
 
         if not instance_data.get("variant"):
             instance_data["variant"] = ""
