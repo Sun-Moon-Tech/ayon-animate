@@ -8,7 +8,7 @@ from ayon_core.pipeline.create import PRODUCT_NAME_ALLOWED_SYMBOLS
 from ayon_animate import api
 from ayon_animate.api.pipeline import cache_and_get_instances
 from ayon_animate.lib import FLAutoCreator, clean_product_name
-import os
+import os, json
 
 # Class is probably going to take a lot of work to switch from image to animate's png seq.
 # Likely workflow will be: export image seq and swf from Animate. Swf will be autocreated as one instance, png seq will be used as an inbetween step via ffmpeg
@@ -112,10 +112,11 @@ NOTE: This render type does not support audio."""
 
             if creator_id == self.identifier:
                 instance_data = self._handle_legacy(instance_data)
-                instance = CreatedInstance.from_existing(
-                    instance_data, self
-                )
-                self._add_instance_to_context(instance)
+                if instance_data:
+                    instance = CreatedInstance.from_existing(
+                        instance_data, self
+                    )
+                    self._add_instance_to_context(instance)
 
     def update_instances(self, update_list):
         self.log.debug("update_list:: {}".format(update_list))
@@ -213,8 +214,10 @@ NOTE: This render type does not support audio."""
 
     def _handle_legacy(self, instance_data):
         """Converts old instances to new format."""
-        if instance_data == None:
-            return None
+        current_context = self.host.get_current_context()
+        if instance_data.get("folderPath"):
+            if instance_data.get("folderPath") != current_context.get("folder_path"):
+                return None                     
 
         if not instance_data.get("members"):
             instance_data["members"] = [instance_data.get("uuid")]
@@ -226,13 +229,14 @@ NOTE: This render type does not support audio."""
 
         if not instance_data.get("task"):
             instance_data["task"] = self.create_context.get_current_task_name()
-        if instance_data.get("task") != self.host.get_current_context().get("task_name"):
+        if instance_data.get("task") != current_context.get("task_name"):
             # update task
             old_task = instance_data.get("task")
-            instance_data["task"] = self.host.get_current_context().get("task_name")
+            instance_data["task"] = current_context.get("task_name")
             # update name
-            product_name = instance_data.get("product_name")
-            instance_data["product_name"] = product_name.replace(old_task.title(), instance_data["task"].title())
+            product_name = getattr(instance_data,"product_name",None)
+            if product_name:
+                instance_data["product_name"] = product_name.replace(old_task.title(), instance_data["task"].title())
 
         if not instance_data.get("variant"):
             instance_data["variant"] = ""
