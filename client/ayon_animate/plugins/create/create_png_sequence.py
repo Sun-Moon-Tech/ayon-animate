@@ -213,6 +213,9 @@ NOTE: This render type does not support audio."""
 
     def _handle_legacy(self, instance_data):
         """Converts old instances to new format."""
+        if instance_data == None:
+            return None
+
         if not instance_data.get("members"):
             instance_data["members"] = [instance_data.get("uuid")]
 

@@ -56,7 +56,7 @@ class ExtractRenderSettings(BaseSettingsModel):
     #     description="List of tasks to render swfs on publish.",
     #     enum_resolver=task_types_enum
     # )
-
+    
     render_quality : int = SettingsField(
         1,
         title="Render quality (0-50)",

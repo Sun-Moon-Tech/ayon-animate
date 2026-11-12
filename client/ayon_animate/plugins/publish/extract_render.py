@@ -31,6 +31,9 @@ class ExtractRender(pyblish.api.InstancePlugin):
     pip_settings = None
     timeline_length = 0
 
+    is_swf_task = False
+    render_quality = 17
+
     def host_trace(self, message):
         return animate.stub().host_trace(message)
  
@@ -88,27 +91,25 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 else:
                     self.log.info(f"PiP entity found: {pip_file_path}")
 
-        ## hard-coded defaults, which should then be set below
-        is_swf_task = False
-        
+
         ## attempt to integrate task_specific render profiles
         render_profile = self._get_render_profile( task_type )
         if render_profile:
-            is_swf_task = render_profile["export_swf"]
+            self.is_swf_task = getattr(render_profile,"export_swf",False)
+            self.render_quality = getattr(render_profile,"render_quality",17)
+            self.render_quality = min(50,max(0,self.render_quality)) # restrict the range
             #render_source = render_profile["render_source"]
-        else:
-            self.log.info( "Getting default publish settings" )
-            ## default settings
-            if not getattr(self, "swf_tasks", None):
-                self.log.warning("No SWF tasks specified in settings")
-                is_swf_task = False
-            else:
-                self.log.info( f"swf_tasks found: {self.swf_tasks}" )
-                is_swf_task = self._get_swf_settings( task_type, self.swf_tasks )
+        # else:
+        #     self.log.info( "Getting default publish settings" )
+        #     ## default settings
+        #     if not getattr(self, "swf_tasks", None):
+        #         self.log.warning("No SWF tasks specified in settings")
+        #         is_swf_task = False
+        #     else:
+        #         self.log.info( f"swf_tasks found: {self.swf_tasks}" )
+        #         is_swf_task = self._get_swf_settings( task_type, self.swf_tasks )
             
-        self.log.info(f"Export SWF: {is_swf_task}" )
-        self.log.info(f"Render source mode: {render_source}" )
-
+        self.log.info(f"Render source: {render_source}; Export SWF: {self.is_swf_task}; Render quality: {self.render_quality}" )
 
         if render_source == "png":
             self.log.info(f"Exporting PNG sequence to {staging_dir}")
@@ -157,7 +158,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 )
         swf_output = None
 
-        if is_swf_task:
+        if self.is_swf_task:
             swf_output = self.export_swf(output_path)
             self.log.info(f"Exported SWF: {swf_output}")
         
@@ -236,11 +237,11 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.log.info( "No render profiles defined in project settings")
         return None
 
-    def _get_swf_settings(self,task_type,swf_tasks):
-        if task_type in [task.lower() for task in swf_tasks]:
-            self.log.info( f"Task type '{task_type}' will require a SWF export")
-            return True
-        return False
+    # def _get_swf_settings(self,task_type,swf_tasks):
+    #     if task_type in [task.lower() for task in swf_tasks]:
+    #         self.log.info( f"Task type '{task_type}' will require a SWF export")
+    #         return True
+    #     return False
 
     def _export_png_sequence(self,output_path):
         export_path = str(output_path).replace("\\", "/")
@@ -301,12 +302,25 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "25",
             "-i",
             png_pattern,
+            ## all of this is colour space management
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-colorspace",
+            "bt709",
+            "-color_range",
+            "tv",
+            # handles transparency
             "-filter_complex",
-            f"scale=in_color_matrix=auto:out_color_matrix=bt709;color='{bg_colour}',format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1",
+            f"color='{bg_colour}',format=rgb24[c];[c][0]scale2ref[c][i];[c][i]overlay=format=auto:shortest=1,setsar=1",
+            # codecs and quality
             "-c:v",
             "libx264",
             "-pix_fmt",
             "yuv420p",
+            "-crf",
+            str(self.render_quality),
             mp4_path,
         ]
         self._run_ffmpeg(args)
@@ -347,7 +361,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
             "-pix_fmt",
             "yuv420p",
             "-crf",
-            "18",
+            str(self.render_quality),
             mp4_path,
         ]
 
