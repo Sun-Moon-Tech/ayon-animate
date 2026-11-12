@@ -96,17 +96,16 @@ class PublishPlugins(BaseSettingsModel):
 DEFAULT_PUBLISH_SETTINGS = {
     "ExtractRender": {
         # "swf_tasks": ["Animation"],
-        "render_quality": 18,
+        "render_quality": 25,
         "include_alpha_in_mov" : False,
         "png_bg_colour" : "#666666",
         "task_render_profiles": [
             {
                 "task_types": ["Animation"],
                 "export_swf": True,
-                "render_quality": 18
+                "render_quality": 25,
             }
         ],
-
         "picture_in_picture": {
             "pip_position" : "top_left",
             "pip_scale" : 0.25,
