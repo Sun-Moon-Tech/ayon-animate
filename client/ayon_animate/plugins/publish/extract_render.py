@@ -10,6 +10,10 @@ from ayon_core.pipeline import (
     publish,
     Anatomy
 )
+from ayon_core.pipeline.publish import (
+    get_plugin_settings,
+    apply_plugin_settings_automatically,
+)
 from ayon_core.pipeline.template_data import get_template_data
 from ayon_animate import api as animate
 
@@ -34,33 +38,38 @@ class ExtractRender(pyblish.api.InstancePlugin):
     is_swf_task = False
     render_quality = 17
 
+    @classmethod
+    def apply_settings(cls, project_settings):
+        plugin_settings = get_plugin_settings(
+            ExtractRender, project_settings, cls.log
+        )
+        apply_plugin_settings_automatically(
+            cls, plugin_settings, cls.log
+        )
+
     def host_trace(self, message):
         return animate.stub().host_trace(message)
  
     def process(self, instance):
         """Extract render instance and output an mp4 representation"""
         self.log.info(f"Extracting render: {instance.data['name']}")
-
         self.creator_attributes = instance.data.get("creator_attributes")
         self.log.debug(self.creator_attributes)
 
-        # API init
+        # API init and animate stuff
         stub = animate.stub()
         staging_dir = self.staging_dir(instance)
-        
         doc_name = stub.get_active_document_name()
         if not doc_name:
             raise RuntimeError("No active Animate document")
         self.timeline_length = stub.get_timeline_length()
-
         file_basename = Path(doc_name).stem
         instance_name = instance.data["name"]
         task_type = instance.data.get("task")
         output_basename = f"{file_basename}_{instance_name}"
         output_path = os.path.join(staging_dir, output_basename)
 
-
-        # render settings from 
+        # render settings from render source
         render_source = self._get_render_source(instance.data)
         frame_start = instance.data.get("frameStart", 1)
         frame_end = instance.data.get("frameEnd", self.timeline_length)
@@ -92,7 +101,6 @@ class ExtractRender(pyblish.api.InstancePlugin):
                     self.log.info(f"PiP entity found: {pip_file_path}")
 
 
-        ## attempt to integrate task_specific render profiles
         render_profile = self._get_render_profile( task_type )
         if render_profile:
             self.is_swf_task = getattr(render_profile,"export_swf",False)
