@@ -36,7 +36,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
     timeline_length = 0
 
     is_swf_task = False
-    render_quality = 17
+    render_quality = 18
 
     @classmethod
     def apply_settings(cls, project_settings):
@@ -104,8 +104,7 @@ class ExtractRender(pyblish.api.InstancePlugin):
         render_profile = self._get_render_profile( task_type )
         if render_profile:
             self.is_swf_task = getattr(render_profile,"export_swf",False)
-            self.render_quality = getattr(render_profile,"render_quality",17)
-            self.render_quality = min(50,max(0,self.render_quality)) # restrict the range
+            self.render_quality = getattr(render_profile,"render_quality",self.render_quality)
             #render_source = render_profile["render_source"]
         # else:
         #     self.log.info( "Getting default publish settings" )
