@@ -20,6 +20,11 @@ class RenderSourceProfile(BaseSettingsModel):
         enum_resolver=task_types_enum
     )
     export_swf: bool = SettingsField(True, title="Export SWF")
+    render_quality : int = SettingsField(
+        1,
+        title="Render quality (0-50)",
+        description="Sets the CRF value for the ffmpeg pass of the Animate export. 0 is lossless, 50 is lowest quality. Recommended range is between 17-25."
+    )
 
 class PictureInPictureSettings(BaseSettingsModel):
     """Settings for picture-in-picture (PiP) burnin when publishing Animate tasks."""
@@ -45,11 +50,17 @@ class PictureInPictureSettings(BaseSettingsModel):
 class ExtractRenderSettings(BaseSettingsModel):
     """Render settings for the Publish tool in Animate."""
 
-    swf_tasks: list[str] = SettingsField(
-        default_factory=list,
-        title="SWF tasks",
-        description="List of tasks to render swfs on publish.",
-        enum_resolver=task_types_enum
+    # swf_tasks: list[str] = SettingsField(
+    #     default_factory=list,
+    #     title="SWF tasks",
+    #     description="List of tasks to render swfs on publish.",
+    #     enum_resolver=task_types_enum
+    # )
+    
+    render_quality : int = SettingsField(
+        1,
+        title="Render quality (0-50)",
+        description="Sets the CRF value for the ffmpeg pass of the Animate export. 0 is lossless, 50 is lowest quality. Recommended range is between 17-25."
     )
 
     include_alpha_in_mov : bool = SettingsField(
@@ -84,13 +95,15 @@ class PublishPlugins(BaseSettingsModel):
 
 DEFAULT_PUBLISH_SETTINGS = {
     "ExtractRender": {
-        "swf_tasks": ["Animation"],
+        # "swf_tasks": ["Animation"],
+        "render_quality": 25,
         "include_alpha_in_mov" : False,
         "png_bg_colour" : "#666666",
         "task_render_profiles": [
             {
                 "task_types": ["Animation"],
-                "export_swf": True
+                "export_swf": True,
+                "render_quality": 25,
             }
         ],
         "picture_in_picture": {

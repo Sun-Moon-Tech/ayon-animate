@@ -101,10 +101,11 @@ class RenderCreator(Creator):
 
             if creator_id == self.identifier:
                 instance_data = self._handle_legacy(instance_data)
-                instance = CreatedInstance.from_existing(
-                    instance_data, self
-                )
-                self._add_instance_to_context(instance)
+                if instance_data:
+                    instance = CreatedInstance.from_existing(
+                        instance_data, self
+                    )
+                    self._add_instance_to_context(instance)
 
 
     def update_instances(self, update_list):
@@ -196,6 +197,11 @@ class RenderCreator(Creator):
 
     def _handle_legacy(self, instance_data):
         """Converts old instances to new format."""
+        current_context = self.host.get_current_context()
+        if instance_data.get("folderPath"):
+            if instance_data.get("folderPath") != current_context.get("folder_path"):
+                return None                     
+    
         if not instance_data.get("members"):
             instance_data["members"] = [instance_data.get("uuid")]
 
