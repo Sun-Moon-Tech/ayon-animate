@@ -100,12 +100,23 @@ class ExtractRender(pyblish.api.InstancePlugin):
                 else:
                     self.log.info(f"PiP entity found: {pip_file_path}")
 
-
         render_profile = self._get_render_profile( task_type )
         if render_profile:
-            self.is_swf_task = getattr(render_profile,"export_swf",False)
-            self.render_quality = getattr(render_profile,"render_quality",self.render_quality)
-            #render_source = render_profile["render_source"]
+            self.is_swf_task = render_profile.get("export_swf", False)
+            self.render_quality = render_profile.get("render_quality", self.render_quality)
+        else:
+            self.is_swf_task = False
+        
+        # block aove is replacement for below, please check
+        
+        #render_profile = self._get_render_profile( task_type )
+        #if render_profile:
+        #    self.is_swf_task = getattr(render_profile,"export_swf",False)
+        #    self.render_quality = getattr(render_profile,"render_quality",self.render_quality)
+        #    #render_source = render_profile["render_source"]
+        
+        #the following was already commented out
+        
         # else:
         #     self.log.info( "Getting default publish settings" )
         #     ## default settings
