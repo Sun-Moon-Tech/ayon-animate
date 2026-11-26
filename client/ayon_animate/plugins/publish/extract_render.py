@@ -106,8 +106,8 @@ class ExtractRender(pyblish.api.InstancePlugin):
             self.render_quality = render_profile.get("render_quality", self.render_quality)
         else:
             self.is_swf_task = False
-        
-        # block aove is replacement for below, please check
+
+        #The block above has replaced the following. Please check
         
         #render_profile = self._get_render_profile( task_type )
         #if render_profile:
