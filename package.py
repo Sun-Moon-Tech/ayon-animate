@@ -1,6 +1,6 @@
 name = "animate"
 title = "Animate"
-version = "1.1.5"
+version = "1.1.6"
 app_host_name = "animate"
 client_dir = "ayon_animate"
 project_can_override_addon_version = True
